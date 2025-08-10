@@ -107,13 +107,6 @@ class TrendLinePaneView implements ISeriesPrimitivePaneView {
     const timeScale = chart.timeScale();
     const x1 = timeScale.timeToCoordinate(options.point1.time);
     const x2 = timeScale.timeToCoordinate(options.point2.time);
-    
-    console.log('🎨 TrendLinePrimitive update:', {
-      id: options.id,
-      point1: { time: options.point1.time, price: options.point1.price, x: x1, y: y1 },
-      point2: { time: options.point2.time, price: options.point2.price, x: x2, y: y2 },
-      coordinates: { x1, y1, x2, y2 }
-    });
 
     this._p1 = { x: x1, y: y1 };
     this._p2 = { x: x2, y: y2 };
@@ -124,27 +117,11 @@ class TrendLinePaneView implements ISeriesPrimitivePaneView {
     
     if (this._p1.x === null || this._p1.y === null || 
         this._p2.x === null || this._p2.y === null) {
-      console.log('⚠️ TrendLinePrimitive renderer returning null:', {
-        id: this._source.options.id,
-        coordinates: { 
-          x1: this._p1.x, 
-          y1: this._p1.y, 
-          x2: this._p2.x, 
-          y2: this._p2.y 
-        }
-      });
+ 
       return null;
     }
     
-    console.log('✅ TrendLinePrimitive renderer creating renderer:', {
-      id: this._source.options.id,
-      coordinates: { 
-        x1: this._p1.x, 
-        y1: this._p1.y, 
-        x2: this._p2.x, 
-        y2: this._p2.y 
-      }
-    });
+
     
     return new TrendLineRenderer(
       this._p1 as { x: number; y: number },

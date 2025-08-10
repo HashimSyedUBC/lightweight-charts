@@ -63,8 +63,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         maxPrice: Math.max(...prices)
       };
       
-      console.log(`📊 Data range timestamps: ${range.minTime} to ${range.maxTime}`);
-      console.log(`📅 Chart time display: ${new Date(range.minTime * 1000).getUTCHours()}:00 to ${new Date(range.maxTime * 1000).getUTCHours()}:${new Date(range.maxTime * 1000).getUTCMinutes().toString().padStart(2, '0')}`);
+
       
       onDataRangeChange(range);
     }
@@ -101,79 +100,78 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
 
   // Helper function to extend time scale for a specific new trend line before adding it
   const extendTimeScaleForNewLine = (lineData: TrendLineData) => {
-    console.log('🔍 extendTimeScaleForNewLine called');
-    
-    if (!chartRef.current || chartDataRef.current.length === 0) {
-      console.log('❌ No chart or data available, returning');
+    if (!chartRef.current || !seriesRef.current || chartDataRef.current.length === 0) {
       return;
     }
     
     // Get current data range
     const dataMinTime = Math.min(...chartDataRef.current.map(d => d.time as number));
     const dataMaxTime = Math.max(...chartDataRef.current.map(d => d.time as number));
-    console.log('📊 Data range:', { 
-      min: dataMinTime, 
-      max: dataMaxTime,
-      minDate: new Date(dataMinTime * 1000).toUTCString(),
-      maxDate: new Date(dataMaxTime * 1000).toUTCString()
-    });
+
     
     // Check if new line extends beyond current data
     const lineMaxTime = Math.max(lineData.point1.time as number, lineData.point2.time as number);
     const lineMinTime = Math.min(lineData.point1.time as number, lineData.point2.time as number);
-    console.log('📐 Line range:', { 
-      min: lineMinTime, 
-      max: lineMaxTime,
-      minDate: new Date(lineMinTime * 1000).toUTCString(),
-      maxDate: new Date(lineMaxTime * 1000).toUTCString()
-    });
+
     
-    // If line extends beyond data, update visible range
+    // If line extends beyond data, add whitespace data points
     if (lineMaxTime > dataMaxTime || lineMinTime < dataMinTime) {
-      console.log('⚡ Line extends beyond data! Extending time scale...');
-      const newMinTime = Math.min(dataMinTime, lineMinTime);
-      const newMaxTime = Math.max(dataMaxTime, lineMaxTime);
-      const padding = (newMaxTime - newMinTime) * 0.05; // 5% padding
+
       
-      console.log('📏 Setting new visible range:', {
-        from: newMinTime - padding,
-        to: newMaxTime + padding,
-        fromDate: new Date((newMinTime - padding) * 1000).toUTCString(),
-        toDate: new Date((newMaxTime + padding) * 1000).toUTCString()
-      });
+      // Get current data
+      const currentData = [...chartDataRef.current];
+      const whitespaceData: any[] = []; // Using any[] for whitespace data
       
+      // Add whitespace data at 15-minute intervals beyond current range
+      if (lineMaxTime > dataMaxTime) {
+
+        let time = dataMaxTime + 900; // Start 15 minutes after last data
+        while (time <= lineMaxTime + 900) { // Add one extra point beyond line
+          whitespaceData.push({ time: time as Time });
+
+          time += 900; // 15 minute intervals
+        }
+      }
+      
+      if (lineMinTime < dataMinTime) {
+
+        let time = dataMinTime - 900; // Start 15 minutes before first data
+        while (time >= lineMinTime - 900) { // Add one extra point before line
+          whitespaceData.unshift({ time: time as Time });
+
+          time -= 900; // 15 minute intervals
+        }
+      }
+      
+      // Combine whitespace with existing data and sort by time
+      const combinedData = [...whitespaceData, ...currentData].sort((a, b) => 
+        (a.time as number) - (b.time as number)
+      );
+      
+
+      
+      // Update chart data reference
+      chartDataRef.current = combinedData;
+      
+      // Update series with new data
+      seriesRef.current.setData(combinedData);
+      
+      // Now set visible range to show the trend line
+      const padding = (lineMaxTime - lineMinTime) * 0.05; // 5% padding
       chartRef.current.timeScale().setVisibleRange({
-        from: (newMinTime - padding) as Time,
-        to: (newMaxTime + padding) as Time
+        from: (lineMinTime - padding) as Time,
+        to: (lineMaxTime + padding) as Time
       });
-      console.log('✅ Time scale extended');
-    } else {
-      console.log('📌 Line is within data range, no extension needed');
+      
     }
   };
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     addTrendLine: (lineData: TrendLineData) => {
-      console.log('🎯 addTrendLine called with:', {
-        point1: { time: lineData.point1.time, price: lineData.point1.price },
-        point2: { time: lineData.point2.time, price: lineData.point2.price },
-        id: lineData.id
-      });
-      
       if (trendLineManagerRef.current && chartRef.current) {
-        console.log('📊 Chart and manager exist, proceeding...');
-        
-        // Log current visible range before extension
-        const currentRange = chartRef.current.timeScale().getVisibleRange();
-        console.log('📍 Current visible range:', currentRange);
-        
         // FIRST: Extend time scale if needed (before adding the trend line)
         extendTimeScaleForNewLine(lineData);
-        
-        // Log visible range after extension
-        const newRange = chartRef.current.timeScale().getVisibleRange();
-        console.log('📍 New visible range after extension:', newRange);
         
         // THEN: Add the trend line (it will now have valid coordinates)
         const trendLineOptions: TrendLineOptions = {
@@ -185,21 +183,16 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           id: lineData.id,
           showLabel: true
         };
-        console.log('➕ Adding trend line with options:', trendLineOptions);
         trendLineManagerRef.current.addTrendLine(trendLineOptions);
         
         // Simple refresh to ensure visibility
-        console.log('🔄 Triggering refresh...');
         setTimeout(() => {
           if (chartRef.current && chartContainerRef.current) {
             chartRef.current.applyOptions({ 
               width: chartContainerRef.current.clientWidth 
             });
-            console.log('✅ Refresh complete');
           }
         }, 10);
-      } else {
-        console.log('❌ Chart or manager not available');
       }
     },
     removeTrendLine: (id: string) => {
