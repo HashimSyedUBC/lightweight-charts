@@ -1,11 +1,13 @@
 import React, { useState, useRef } from 'react';
 import { TradingChart, TradingChartRef, ChartDataRange } from './TradingChart';
 import { DrawingControls, TrendLineData } from './DrawingControls';
+import { RectangleData } from './RectanglePrimitive';
 import './App.css';
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [trendLines, setTrendLines] = useState<TrendLineData[]>([]);
+  const [rectangles, setRectangles] = useState<RectangleData[]>([]);
   const [dataRange, setDataRange] = useState<ChartDataRange | null>(null);
   const chartRef = useRef<TradingChartRef>(null);
   
@@ -29,6 +31,18 @@ function App() {
     setTrendLines(prev => prev.filter(line => line.id !== id));
     chartRef.current?.removeTrendLine(id);
   };
+
+  const handleAddRectangle = (rectangleData: RectangleData) => {
+    setRectangles(prev => [...prev, rectangleData]);
+    chartRef.current?.addRectangle(rectangleData);
+  };
+
+  const handleRemoveRectangle = (id: string) => {
+    setRectangles(prev => prev.filter(rect => rect.id !== id));
+    chartRef.current?.removeRectangle(id);
+  };
+
+
 
   return (
     <div className="App" style={{ backgroundColor: theme === 'dark' ? '#0d0d0d' : '#f5f5f5' }}>
@@ -70,6 +84,9 @@ function App() {
           onAddTrendLine={handleAddTrendLine}
           onRemoveTrendLine={handleRemoveTrendLine}
           trendLines={trendLines}
+          onAddRectangle={handleAddRectangle}
+          onRemoveRectangle={handleRemoveRectangle}
+          rectangles={rectangles}
           theme={theme}
           dataRange={dataRange}
         />

@@ -1,15 +1,17 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
 import {
   createChart,
   IChartApi,
   ISeriesApi,
   CandlestickData,
   Time,
+  ColorType,
   CandlestickSeriesOptions,
   DeepPartial
 } from 'lightweight-charts';
 import { MockPolygonWebSocket, PolygonAggregateBar } from './MockPolygonWebSocket';
 import { TrendLineManager, TrendLineOptions } from './TrendLinePrimitive';
+import { RectangleManager, RectangleData } from './RectanglePrimitive';
 import { TrendLineData } from './DrawingControls';
 
 interface TradingChartProps {
@@ -31,6 +33,8 @@ export interface TradingChartRef {
   addTrendLine: (lineData: TrendLineData) => void;
   removeTrendLine: (id: string) => void;
   removeAllTrendLines: () => void;
+  addRectangle: (rectangleData: RectangleData) => void;
+  removeRectangle: (id: string) => void;
   getDataRange: () => ChartDataRange | null;
 }
 
@@ -41,6 +45,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const wsRef = useRef<MockPolygonWebSocket | null>(null);
   const trendLineManagerRef = useRef<TrendLineManager | null>(null);
+  const rectangleManagerRef = useRef<RectangleManager | null>(null);
   const chartDataRef = useRef<CandlestickData[]>([]);
 
   // Helper function to notify data range changes
@@ -98,8 +103,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     });
   };
 
-  // Helper function to extend time scale for a specific new trend line before adding it
-  const extendTimeScaleForNewLine = (lineData: TrendLineData) => {
+  // Helper function to extend time scale for any shape before adding it
+  const extendTimeScaleForShape = (shapeMinTime: number, shapeMaxTime: number) => {
     if (!chartRef.current || !seriesRef.current || chartDataRef.current.length === 0) {
       return;
     }
@@ -109,13 +114,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     const dataMaxTime = Math.max(...chartDataRef.current.map(d => d.time as number));
 
     
-    // Check if new line extends beyond current data
-    const lineMaxTime = Math.max(lineData.point1.time as number, lineData.point2.time as number);
-    const lineMinTime = Math.min(lineData.point1.time as number, lineData.point2.time as number);
-
-    
-    // If line extends beyond data, add whitespace data points
-    if (lineMaxTime > dataMaxTime || lineMinTime < dataMinTime) {
+    // If shape extends beyond data, add whitespace data points
+    if (shapeMaxTime > dataMaxTime || shapeMinTime < dataMinTime) {
 
       
       // Get current data
@@ -123,20 +123,20 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       const whitespaceData: any[] = []; // Using any[] for whitespace data
       
       // Add whitespace data at 15-minute intervals beyond current range
-      if (lineMaxTime > dataMaxTime) {
+      if (shapeMaxTime > dataMaxTime) {
 
         let time = dataMaxTime + 900; // Start 15 minutes after last data
-        while (time <= lineMaxTime + 900) { // Add one extra point beyond line
+        while (time <= shapeMaxTime + 900) { // Add one extra point beyond line
           whitespaceData.push({ time: time as Time });
 
           time += 900; // 15 minute intervals
         }
       }
       
-      if (lineMinTime < dataMinTime) {
+      if (shapeMinTime < dataMinTime) {
 
         let time = dataMinTime - 900; // Start 15 minutes before first data
-        while (time >= lineMinTime - 900) { // Add one extra point before line
+        while (time >= shapeMinTime - 900) { // Add one extra point before line
           whitespaceData.unshift({ time: time as Time });
 
           time -= 900; // 15 minute intervals
@@ -157,10 +157,10 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       seriesRef.current.setData(combinedData);
       
       // Now set visible range to show the trend line
-      const padding = (lineMaxTime - lineMinTime) * 0.05; // 5% padding
+      const padding = (shapeMaxTime - shapeMinTime) * 0.05; // 5% padding
       chartRef.current.timeScale().setVisibleRange({
-        from: (lineMinTime - padding) as Time,
-        to: (lineMaxTime + padding) as Time
+        from: (shapeMinTime - padding) as Time,
+        to: (shapeMaxTime + padding) as Time
       });
       
     }
@@ -171,7 +171,9 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     addTrendLine: (lineData: TrendLineData) => {
       if (trendLineManagerRef.current && chartRef.current) {
         // FIRST: Extend time scale if needed (before adding the trend line)
-        extendTimeScaleForNewLine(lineData);
+        const minTime = Math.min(lineData.point1.time as number, lineData.point2.time as number);
+        const maxTime = Math.max(lineData.point1.time as number, lineData.point2.time as number);
+        extendTimeScaleForShape(minTime, maxTime);
         
         // THEN: Add the trend line (it will now have valid coordinates)
         const trendLineOptions: TrendLineOptions = {
@@ -227,6 +229,47 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         }
       }
     },
+    addRectangle: (rectangleData: RectangleData) => {
+      if (rectangleManagerRef.current && chartRef.current) {
+        // FIRST: Extract min/max times from all 4 points
+        const times = [
+          rectangleData.points.p1.time as number,
+          rectangleData.points.p2.time as number,
+          rectangleData.points.p3.time as number,
+          rectangleData.points.p4.time as number
+        ];
+        const minTime = Math.min(...times);
+        const maxTime = Math.max(...times);
+        
+        // Extend time scale if needed
+        extendTimeScaleForShape(minTime, maxTime);
+        
+        // THEN: Add the rectangle (it will now have valid coordinates)
+        rectangleManagerRef.current.addRectangle(rectangleData);
+        
+        // Simple refresh to ensure visibility
+        setTimeout(() => {
+          if (chartRef.current && chartContainerRef.current) {
+            chartRef.current.applyOptions({ 
+              width: chartContainerRef.current.clientWidth 
+            });
+          }
+        }, 10);
+      }
+    },
+    removeRectangle: (id: string) => {
+      if (rectangleManagerRef.current) {
+        rectangleManagerRef.current.removeRectangle(id);
+        // Auto-refresh after removal
+        setTimeout(() => {
+          if (chartRef.current && chartContainerRef.current) {
+            chartRef.current.applyOptions({ 
+              width: chartContainerRef.current.clientWidth 
+            });
+          }
+        }, 10);
+      }
+    },
     getDataRange: (): ChartDataRange | null => {
       const data = chartDataRef.current;
       if (data.length === 0) return null;
@@ -240,7 +283,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         minPrice: Math.min(...prices),
         maxPrice: Math.max(...prices)
       };
-    }
+    },
+
   }), []);
 
   useEffect(() => {
@@ -287,7 +331,10 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     
     // Initialize trend line manager
     trendLineManagerRef.current = new TrendLineManager(candlestickSeries);
-
+    
+    // Initialize rectangle manager
+    rectangleManagerRef.current = new RectangleManager(chart, candlestickSeries);
+    
     // Handle resize
     const handleResize = () => {
       if (chartContainerRef.current) {
@@ -306,7 +353,6 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       // Start at 00:00 UTC (which is 8:00 PM EST on Aug 8)
       const startTime = Math.floor(Date.UTC(2025, 7, 9, 0, 0, 0) / 1000); // Aug 9, 2025 00:00 UTC
       
-      console.log(`📅 Raw UTC data start: ${startTime} (${new Date(startTime * 1000).toUTCString()})`);
       
       let price = initialPrice;
       
@@ -338,9 +384,6 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       const endHour = new Date((data[data.length - 1].time as number) * 1000).getUTCHours();
       const endMinute = new Date((data[data.length - 1].time as number) * 1000).getUTCMinutes();
       
-      console.log(`📅 Chart displays: ${startHour}:00 to ${endHour}:${endMinute.toString().padStart(2, '0')} (24-hour format)`);
-      console.log(`📊 These times represent EST/EDT (UTC-4)`);
-      console.log(`📍 Actual display timestamps: ${data[0].time} to ${data[data.length - 1].time}`);
       
       return data;
     };
