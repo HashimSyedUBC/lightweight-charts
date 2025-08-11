@@ -1,13 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { TradingChart, TradingChartRef, ChartDataRange } from './TradingChart';
-import { DrawingControls, TrendLineData } from './DrawingControls';
+import { DrawingControls, TrendLineData, LabelData } from './DrawingControls';
 import { RectangleData } from './RectanglePrimitive';
+import { Time } from 'lightweight-charts';
 import './App.css';
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [trendLines, setTrendLines] = useState<TrendLineData[]>([]);
   const [rectangles, setRectangles] = useState<RectangleData[]>([]);
+  const [labels, setLabels] = useState<LabelData[]>([]);
   const [dataRange, setDataRange] = useState<ChartDataRange | null>(null);
   const chartRef = useRef<TradingChartRef>(null);
   
@@ -42,6 +44,16 @@ function App() {
     chartRef.current?.removeRectangle(id);
   };
 
+  const handleAddLabel = (labelData: LabelData) => {
+    setLabels(prev => [...prev, labelData]);
+    chartRef.current?.addLabel(labelData);
+  };
+
+  const handleRemoveLabel = (id: string) => {
+    setLabels(prev => prev.filter(label => label.id !== id));
+    chartRef.current?.removeLabel(id);
+  };
+
 
 
   return (
@@ -69,6 +81,42 @@ function App() {
           >
             {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
           </button>
+          <button
+            onClick={() => {
+              // TEST: Add two labels at different times
+              const label1 = {
+                id: Date.now().toString(),
+                time: (Date.UTC(2025, 7, 9, 23, 0, 0) / 1000) as Time, // Aug 9, 23:00
+                price: 152.50,
+                text: 'LABEL AUG 9'
+              };
+              
+              const label2 = {
+                id: (Date.now() + 1).toString(),
+                time: (Date.UTC(2025, 7, 7, 23, 0, 0) / 1000) as Time, // Aug 7, 23:00
+                price: 148.00,
+                text: 'LABEL AUG 7'
+              };
+              
+              chartRef.current?.addLabel(label1);
+              chartRef.current?.addLabel(label2);
+              
+              console.log('TEST: Added label at Aug 9 23:00');
+              console.log('TEST: Added label at Aug 7 23:00');
+            }}
+            style={{
+              marginLeft: '10px',
+              padding: '8px 16px',
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Test Label (Red Dot)
+          </button>
         </div>
       </header>
       <main className="App-main">
@@ -87,6 +135,9 @@ function App() {
           onAddRectangle={handleAddRectangle}
           onRemoveRectangle={handleRemoveRectangle}
           rectangles={rectangles}
+          onAddLabel={handleAddLabel}
+          onRemoveLabel={handleRemoveLabel}
+          labels={labels}
           theme={theme}
           dataRange={dataRange}
         />

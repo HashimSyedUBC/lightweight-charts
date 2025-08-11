@@ -12,6 +12,7 @@ import {
 import { MockPolygonWebSocket, PolygonAggregateBar } from './MockPolygonWebSocket';
 import { TrendLineManager, TrendLineOptions } from './TrendLinePrimitive';
 import { RectangleManager, RectangleData } from './RectanglePrimitive';
+import { LabelManager, LabelOptions } from './LabelPrimitive';
 import { TrendLineData } from './DrawingControls';
 
 interface TradingChartProps {
@@ -35,6 +36,8 @@ export interface TradingChartRef {
   removeAllTrendLines: () => void;
   addRectangle: (rectangleData: RectangleData) => void;
   removeRectangle: (id: string) => void;
+  addLabel: (labelData: { time: Time; price: number; text: string; id: string }) => void;
+  removeLabel: (id: string) => void;
   getDataRange: () => ChartDataRange | null;
 }
 
@@ -46,6 +49,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
   const wsRef = useRef<MockPolygonWebSocket | null>(null);
   const trendLineManagerRef = useRef<TrendLineManager | null>(null);
   const rectangleManagerRef = useRef<RectangleManager | null>(null);
+  const labelManagerRef = useRef<LabelManager | null>(null);
   const chartDataRef = useRef<CandlestickData[]>([]);
 
   // Helper function to notify data range changes
@@ -270,6 +274,39 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         }, 10);
       }
     },
+    addLabel: (labelData: { time: Time; price: number; text: string; id: string }) => {
+      if (labelManagerRef.current && chartRef.current) {
+        // FIRST: Extend time scale if needed (before adding the label)
+        extendTimeScaleForShape(labelData.time as number, labelData.time as number);
+        
+        // THEN: Add the label
+        const labelOptions: LabelOptions = {
+          time: labelData.time,
+          price: labelData.price,
+          text: labelData.text,
+          color: '#ef4444', // red
+          fontSize: 25,
+          id: labelData.id
+        };
+        labelManagerRef.current.addLabel(labelOptions);
+        console.log('[TradingChart] Label added via ref:', labelData.id);
+        
+        // Simple refresh to ensure visibility (same as trend lines and rectangles)
+        setTimeout(() => {
+          if (chartRef.current && chartContainerRef.current) {
+            chartRef.current.applyOptions({ 
+              width: chartContainerRef.current.clientWidth 
+            });
+          }
+        }, 10);
+      }
+    },
+    removeLabel: (id: string) => {
+      if (labelManagerRef.current) {
+        labelManagerRef.current.removeLabel(id);
+        console.log('[TradingChart] Label removed:', id);
+      }
+    },
     getDataRange: (): ChartDataRange | null => {
       const data = chartDataRef.current;
       if (data.length === 0) return null;
@@ -334,6 +371,9 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     
     // Initialize rectangle manager
     rectangleManagerRef.current = new RectangleManager(chart, candlestickSeries);
+    
+    // Initialize label manager
+    labelManagerRef.current = new LabelManager(candlestickSeries);
     
     // Handle resize
     const handleResize = () => {

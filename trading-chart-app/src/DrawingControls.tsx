@@ -18,6 +18,14 @@ export interface TrendLineData {
   lineStyle?: number; // 0 = solid, 1 = dotted, 2 = dashed
 }
 
+export interface LabelData {
+  id: string;
+  time: Time;
+  price: number;
+  text: string;
+  color?: string;
+}
+
 interface DrawingControlsProps {
   onAddTrendLine: (lineData: TrendLineData) => void;
   onRemoveTrendLine: (id: string) => void;
@@ -25,6 +33,9 @@ interface DrawingControlsProps {
   onAddRectangle: (rectangleData: RectangleData) => void;
   onRemoveRectangle: (id: string) => void;
   rectangles: RectangleData[];
+  onAddLabel: (labelData: LabelData) => void;
+  onRemoveLabel: (id: string) => void;
+  labels: LabelData[];
   theme: 'dark' | 'light';
   dataRange: ChartDataRange | null;
 }
@@ -36,6 +47,9 @@ export const DrawingControls: React.FC<DrawingControlsProps> = ({
   onAddRectangle,
   onRemoveRectangle,
   rectangles,
+  onAddLabel,
+  onRemoveLabel,
+  labels,
   theme,
   dataRange
 }) => {
@@ -965,6 +979,222 @@ export const DrawingControls: React.FC<DrawingControlsProps> = ({
                   </div>
                   <button
                     onClick={() => onRemoveRectangle(rect.id)}
+                    style={{
+                      padding: '4px 12px',
+                      backgroundColor: 'transparent',
+                      color: errorColor,
+                      border: `1px solid ${errorColor}`,
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* Label Section */}
+      <div
+        style={{
+          padding: '20px',
+          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+          borderRadius: '8px',
+          marginBottom: '20px',
+          border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'}`
+        }}
+      >
+        <h3 style={{ margin: '0 0 20px 0', fontSize: '18px' }}>Add Label</h3>
+        
+        {/* Label Text Input */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+            Label Text
+          </label>
+          <input
+            type="text"
+            value={labelText}
+            onChange={(e) => setLabelText(e.target.value)}
+            placeholder="Enter label text"
+            style={{
+              width: '100%',
+              padding: '10px',
+              fontSize: '14px',
+              backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+              border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+              borderRadius: '4px',
+              color: isDark ? '#fff' : '#000',
+              boxSizing: 'border-box'
+            }}
+          />
+        </div>
+
+        {/* Label Point */}
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px' }}>
+            Position
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', opacity: 0.7 }}>
+                Day
+              </label>
+              <select
+                value={labelDay}
+                onChange={(e) => setLabelDay(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+                  borderRadius: '4px',
+                  color: isDark ? '#fff' : '#000'
+                }}
+              >
+                {Array.from({length: 10}, (_, i) => i + 1).map(day => (
+                  <option key={day} value={day}>{day}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', opacity: 0.7 }}>
+                Time (HH:MM)
+              </label>
+              <input
+                type="text"
+                value={labelTime}
+                onChange={(e) => setLabelTime(e.target.value)}
+                placeholder="HH:MM"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+                  borderRadius: '4px',
+                  color: isDark ? '#fff' : '#000'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px', opacity: 0.7 }}>
+                Price
+              </label>
+              <input
+                type="text"
+                value={labelPrice}
+                onChange={(e) => setLabelPrice(e.target.value)}
+                placeholder="150.00"
+                style={{
+                  width: '100%',
+                  padding: '8px',
+                  fontSize: '14px',
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)'}`,
+                  borderRadius: '4px',
+                  color: isDark ? '#fff' : '#000'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Add Label Button */}
+        <button
+          onClick={() => {
+            const handleAddLabel = () => {
+              setErrors([]);
+              
+              // Validate inputs
+              if (!labelText.trim()) {
+                setErrors(['Label text cannot be empty']);
+                return;
+              }
+              
+              const price = parseFloat(labelPrice);
+              if (isNaN(price)) {
+                setErrors(['Invalid price format. Must be a number']);
+                return;
+              }
+
+              const timestamp = convertTimeToTimestamp(labelTime, labelDay);
+              if (!timestamp) {
+                return; // convertTimeToTimestamp already sets the error
+              }
+
+              const labelData: LabelData = {
+                id: Date.now().toString(),
+                time: timestamp,
+                price: price,
+                text: labelText,
+                color: labelColor
+              };
+
+              onAddLabel(labelData);
+              
+              // Reset to defaults
+              setLabelText('ENTRY');
+              setLabelTime('12:00');
+              setLabelPrice('150.00');
+              setErrors([]);
+            };
+            
+            handleAddLabel();
+          }}
+          style={{
+            width: '100%',
+            padding: '12px',
+            fontSize: '16px',
+            fontWeight: 'bold',
+            backgroundColor: successColor,
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
+        >
+          Add Label
+        </button>
+
+        {/* Active Labels */}
+        {labels.length > 0 && (
+          <div style={{ marginTop: '30px' }}>
+            <h4 style={{ margin: '0 0 15px 0', fontSize: '16px' }}>Active Labels</h4>
+            <div style={{ display: 'grid', gap: '10px' }}>
+              {labels.map((label) => (
+                <div
+                  key={label.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px',
+                    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div
+                      style={{
+                        width: '20px',
+                        height: '20px',
+                        backgroundColor: label.color || labelColor,
+                        borderRadius: '2px'
+                      }}
+                    />
+                    <span>
+                      {label.text} - ${label.price.toFixed(2)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => onRemoveLabel(label.id)}
                     style={{
                       padding: '4px 12px',
                       backgroundColor: 'transparent',
