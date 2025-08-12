@@ -54,12 +54,11 @@ export type ViewportDrawing = {
   style: any;
   // geometry varies by type
   data: any;
-  bounds: { minTime: number; maxTime: number; minPrice: number; maxPrice: number };
-  screenPoints?: ScreenPoint[];
+  bounds: { minTime: string; maxTime: string; minPrice: number; maxPrice: number };
 };
 
 export interface ViewportState {
-  timeRange: { minTime: number; maxTime: number; centerTime: number };
+  timeRange: { minTime: string; maxTime: string; centerTime: string };
   priceRangeVisible: { minPrice: number; maxPrice: number; centerPrice: number };
   cadenceSec: number;
   barsVisibleEstimate: number;
@@ -95,6 +94,11 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
   const lockedVisibleRangeRef = useRef<{ from: Time; to: Time } | null>(null);
   const isUpdatingExtensionRef = useRef(false);
   const barIntervalSecRef = useRef<number>(900);
+
+  // Helper function to convert Unix timestamp to UTC string
+  const unixToUTC = (unixSeconds: number): string => {
+    return new Date(unixSeconds * 1000).toISOString();
+  };
 
   // Helper function to notify data range changes
   const notifyDataRangeChange = () => {
@@ -471,21 +475,32 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       const maxTime = (visibleTimeRange?.to as number) ?? fallbackMaxT;
       const centerTime = (minTime + maxTime) / 2;
 
-      // Price visible range from price scale (cast to any for broader lib compatibility)
-      const ps: any = series.priceScale();
-      const pr = ps && typeof ps.getVisibleRange === 'function' ? ps.getVisibleRange() : null;
-      // If null, approximate from currently visible candles' price extents or fallback to data range
+      // Get visible price range from viewport coordinates
       let minPrice: number;
       let maxPrice: number;
-      if (pr && typeof pr.minValue === 'number' && typeof pr.maxValue === 'number') {
-        minPrice = pr.minValue;
-        maxPrice = pr.maxValue;
+      
+      const containerHeight = chartContainerRef.current?.clientHeight || 0;
+      if (containerHeight > 0) {
+        // Y=0 is top (higher price), Y=height is bottom (lower price)
+        const topPrice = series.coordinateToPrice(0);
+        const bottomPrice = series.coordinateToPrice(containerHeight);
+        
+        if (topPrice !== null && bottomPrice !== null) {
+          maxPrice = topPrice as number;
+          minPrice = bottomPrice as number;
+        } else {
+          // Fallback: use data range
+          const allPrices = data.flatMap(d => [d.open, d.high, d.low, d.close]);
+          minPrice = allPrices.length ? Math.min(...allPrices) : 0;
+          maxPrice = allPrices.length ? Math.max(...allPrices) : 0;
+        }
       } else {
-        // Fallback: use data range (not perfect but avoids nulls)
+        // Fallback: use data range
         const allPrices = data.flatMap(d => [d.open, d.high, d.low, d.close]);
         minPrice = allPrices.length ? Math.min(...allPrices) : 0;
         maxPrice = allPrices.length ? Math.max(...allPrices) : 0;
       }
+      
       const centerPrice = (minPrice + maxPrice) / 2;
 
       // Cadence and bars estimate
@@ -526,9 +541,11 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           type: 'trendline',
           isVisible,
           style: { color: opt.color, lineWidth: opt.lineWidth, lineStyle: opt.lineStyle },
-          data: { leftPoint, rightPoint },
-          bounds: { minTime: bMinT, maxTime: bMaxT, minPrice: bMinP, maxPrice: bMaxP },
-          ...(screenPoints ? { screenPoints } : {}),
+          data: { 
+            leftPoint: { time: unixToUTC(leftPoint.time), price: leftPoint.price }, 
+            rightPoint: { time: unixToUTC(rightPoint.time), price: rightPoint.price } 
+          },
+          bounds: { minTime: unixToUTC(bMinT), maxTime: unixToUTC(bMaxT), minPrice: bMinP, maxPrice: bMaxP },
         });
       });
 
@@ -572,13 +589,12 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           isVisible,
           style: { fillColor: data.fillColor, fillOpacity: data.fillOpacity, borderColor: data.borderColor, borderWidth: data.borderWidth },
           data: {
-            topLeftCorner: { time: p1t, price: p1p },
-            topRightCorner: { time: p2t, price: p2p },
-            bottomRightCorner: { time: p3t, price: p3p },
-            bottomLeftCorner: { time: p4t, price: p4p },
+            topLeftCorner: { time: unixToUTC(p1t), price: p1p },
+            topRightCorner: { time: unixToUTC(p2t), price: p2p },
+            bottomRightCorner: { time: unixToUTC(p3t), price: p3p },
+            bottomLeftCorner: { time: unixToUTC(p4t), price: p4p },
           },
-          bounds: { minTime: bMinT, maxTime: bMaxT, minPrice: bMinP, maxPrice: bMaxP },
-          ...(screenPoints ? { screenPoints } : {}),
+          bounds: { minTime: unixToUTC(bMinT), maxTime: unixToUTC(bMaxT), minPrice: bMinP, maxPrice: bMaxP },
         });
       });
 
@@ -606,14 +622,17 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           type: 'label',
           isVisible,
           style: { color: opt.color, fontSize: opt.fontSize },
-          data: { anchor: { time: t, price: p }, text: opt.text },
-          bounds: { minTime: bMinT, maxTime: bMaxT, minPrice: bMinP, maxPrice: bMaxP },
-          ...(screenPoints ? { screenPoints } : {}),
+          data: { anchor: { time: unixToUTC(t), price: p }, text: opt.text },
+          bounds: { minTime: unixToUTC(bMinT), maxTime: unixToUTC(bMaxT), minPrice: bMinP, maxPrice: bMaxP },
         });
       });
 
       return {
-        timeRange: { minTime, maxTime, centerTime },
+        timeRange: { 
+          minTime: unixToUTC(minTime), 
+          maxTime: unixToUTC(maxTime), 
+          centerTime: unixToUTC(centerTime) 
+        },
         priceRangeVisible: { minPrice, maxPrice, centerPrice },
         cadenceSec,
         barsVisibleEstimate,

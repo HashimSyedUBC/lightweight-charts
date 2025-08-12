@@ -375,7 +375,7 @@ function App() {
               fontSize: '16px'
             }}
           >
-            🚀 Test: Draw Past Time
+           log view port
           </button>
           <button
             onClick={testDrawWhileStreaming}
@@ -391,66 +391,6 @@ function App() {
             }}
           >
             🧭 Log Viewport
-          </button>
-          <button
-            onClick={testMultipleDrawings}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#9333ea' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '14px'
-            }}
-          >
-            🎯 Test: Multiple Overlaps
-          </button>
-          <button
-            onClick={testRectanglesOutsideRange}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#ff6b6b' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '14px'
-            }}
-          >
-            📦 Test: Rects Outside
-          </button>
-          <button
-            onClick={testLabelsOutsideRange}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#4ecdc4' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '14px'
-            }}
-          >
-            🏷️ Test: Labels Outside
-          </button>
-          <button
-            onClick={testWithinRangeOffCadence}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#f39c12' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '14px'
-            }}
-          >
-            ⏱️ Test: Off-Cadence
           </button>
         </div>
         
