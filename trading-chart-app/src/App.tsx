@@ -239,6 +239,13 @@ function App() {
     
   };
 
+  // Test function: Log current viewport
+  const testLogViewport = () => {
+    const vp = chartRef.current?.getViewport?.();
+    console.log('Viewport:', vp);
+    (window as any).viewport = vp; // convenience for manual inspection
+  };
+
 
 
   return (
@@ -356,6 +363,104 @@ function App() {
           >
             ⏱️ Test: Off-Cadence
           </button>
+          <button
+            onClick={testLogViewport}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: '#2d8cff',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '16px'
+            }}
+          >
+            🚀 Test: Draw Past Time
+          </button>
+          <button
+            onClick={testDrawWhileStreaming}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#00aa00' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '14px'
+            }}
+          >
+            🧭 Log Viewport
+          </button>
+          <button
+            onClick={testMultipleDrawings}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#9333ea' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '14px'
+            }}
+          >
+            🎯 Test: Multiple Overlaps
+          </button>
+          <button
+            onClick={testRectanglesOutsideRange}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#ff6b6b' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '14px'
+            }}
+          >
+            📦 Test: Rects Outside
+          </button>
+          <button
+            onClick={testLabelsOutsideRange}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#4ecdc4' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '14px'
+            }}
+          >
+            🏷️ Test: Labels Outside
+          </button>
+          <button
+            onClick={testWithinRangeOffCadence}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#f39c12' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '14px'
+            }}
+          >
+            ⏱️ Test: Off-Cadence
+          </button>
+        </div>
+        
+        <div style={{ 
+          marginTop: '10px', 
+          fontSize: '12px', 
+          color: theme === 'dark' ? '#888' : '#666',
+          fontFamily: 'monospace'
+        }}>
+          💡 Open console and use: <code>window.chart.addTrendLine({'{...}'})</code> | Data range: <code>window.dataRange</code>
         </div>
         
         <div style={{ 

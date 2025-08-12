@@ -43,6 +43,29 @@ export interface ChartDataRange {
   maxPrice: number;
 }
 
+// Viewport API types
+export type ScreenPoint = { x: number; y: number };
+
+export type ViewportDrawing = {
+  id: string;
+  type: 'trendline' | 'rectangle' | 'label';
+  isVisible: boolean;
+  // style fields vary by type
+  style: any;
+  // geometry varies by type
+  data: any;
+  bounds: { minTime: number; maxTime: number; minPrice: number; maxPrice: number };
+  screenPoints?: ScreenPoint[];
+};
+
+export interface ViewportState {
+  timeRange: { minTime: number; maxTime: number; centerTime: number };
+  priceRangeVisible: { minPrice: number; maxPrice: number; centerPrice: number };
+  cadenceSec: number;
+  barsVisibleEstimate: number;
+  drawings: ViewportDrawing[];
+}
+
 export interface TradingChartRef {
   addTrendLine: (lineData: TrendLineData) => void;
   removeTrendLine: (id: string) => void;
@@ -52,6 +75,7 @@ export interface TradingChartRef {
   addLabel: (labelData: { time: Time; price: number; text: string; id: string }) => void;
   removeLabel: (id: string) => void;
   getDataRange: () => ChartDataRange | null;
+  getViewport: () => ViewportState | null;
 }
 
 export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
@@ -425,6 +449,175 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         maxTime: Math.max(...times),
         minPrice: Math.min(...prices),
         maxPrice: Math.max(...prices)
+      };
+    },
+
+    // Rich AI-friendly viewport snapshot
+    getViewport: (): ViewportState | null => {
+      const chart = chartRef.current;
+      const series = seriesRef.current;
+      if (!chart || !series) return null;
+
+      const timeScale = chart.timeScale();
+      const visibleTimeRange = timeScale.getVisibleRange();
+
+      // Fallbacks if null
+      const data = chartDataRef.current;
+      const dataTimes = data.map(d => d.time as number);
+      const fallbackMinT = dataTimes.length ? Math.min(...dataTimes) : 0;
+      const fallbackMaxT = dataTimes.length ? Math.max(...dataTimes) : 0;
+
+      const minTime = (visibleTimeRange?.from as number) ?? fallbackMinT;
+      const maxTime = (visibleTimeRange?.to as number) ?? fallbackMaxT;
+      const centerTime = (minTime + maxTime) / 2;
+
+      // Price visible range from price scale (cast to any for broader lib compatibility)
+      const ps: any = series.priceScale();
+      const pr = ps && typeof ps.getVisibleRange === 'function' ? ps.getVisibleRange() : null;
+      // If null, approximate from currently visible candles' price extents or fallback to data range
+      let minPrice: number;
+      let maxPrice: number;
+      if (pr && typeof pr.minValue === 'number' && typeof pr.maxValue === 'number') {
+        minPrice = pr.minValue;
+        maxPrice = pr.maxValue;
+      } else {
+        // Fallback: use data range (not perfect but avoids nulls)
+        const allPrices = data.flatMap(d => [d.open, d.high, d.low, d.close]);
+        minPrice = allPrices.length ? Math.min(...allPrices) : 0;
+        maxPrice = allPrices.length ? Math.max(...allPrices) : 0;
+      }
+      const centerPrice = (minPrice + maxPrice) / 2;
+
+      // Cadence and bars estimate
+      const cadenceSec = computeCadenceSec(chartDataRef.current);
+      const barsVisibleEstimate = cadenceSec > 0 ? Math.max(0, Math.round((maxTime - minTime) / cadenceSec)) : 0;
+
+      // Build drawings array from all managers
+      const drawings: ViewportDrawing[] = [];
+
+      // Trendlines
+      const tls = trendLineManagerRef.current ? trendLineManagerRef.current.getAllTrendLines() : [];
+      tls.forEach((tl) => {
+        const opt = (tl as any).options as any;
+        const p1t = opt.point1.time as number; const p1p = opt.point1.price as number;
+        const p2t = opt.point2.time as number; const p2p = opt.point2.price as number;
+        const leftFirst = p1t <= p2t;
+        const leftPoint = leftFirst ? { time: p1t, price: p1p } : { time: p2t, price: p2p };
+        const rightPoint = leftFirst ? { time: p2t, price: p2p } : { time: p1t, price: p1p };
+        const bMinT = Math.min(p1t, p2t); const bMaxT = Math.max(p1t, p2t);
+        const bMinP = Math.min(p1p, p2p); const bMaxP = Math.max(p1p, p2p);
+        const timeOverlap = bMaxT >= minTime && bMinT <= maxTime;
+        const priceOverlap = bMaxP >= minPrice && bMinP <= maxPrice;
+        let isVisible = timeOverlap && priceOverlap;
+        let screenPoints: ScreenPoint[] | undefined = undefined;
+        if (isVisible) {
+          const x1 = timeScale.timeToCoordinate(leftPoint.time as Time);
+          const y1 = series.priceToCoordinate(leftPoint.price);
+          const x2 = timeScale.timeToCoordinate(rightPoint.time as Time);
+          const y2 = series.priceToCoordinate(rightPoint.price);
+          if (x1 == null || y1 == null || x2 == null || y2 == null) {
+            isVisible = false;
+          } else {
+            screenPoints = [ { x: x1 as number, y: y1 as number }, { x: x2 as number, y: y2 as number } ];
+          }
+        }
+        drawings.push({
+          id: opt.id,
+          type: 'trendline',
+          isVisible,
+          style: { color: opt.color, lineWidth: opt.lineWidth, lineStyle: opt.lineStyle },
+          data: { leftPoint, rightPoint },
+          bounds: { minTime: bMinT, maxTime: bMaxT, minPrice: bMinP, maxPrice: bMaxP },
+          ...(screenPoints ? { screenPoints } : {}),
+        });
+      });
+
+      // Rectangles
+      const rects = rectangleManagerRef.current ? (rectangleManagerRef.current as any).rectangles as any[] : [];
+      rects.forEach((rp: any) => {
+        const data = rp.data as any;
+        const p1t = data.points.p1.time as number; const p1p = data.points.p1.price as number;
+        const p2t = data.points.p2.time as number; const p2p = data.points.p2.price as number;
+        const p3t = data.points.p3.time as number; const p3p = data.points.p3.price as number;
+        const p4t = data.points.p4.time as number; const p4p = data.points.p4.price as number;
+        const bMinT = Math.min(p1t, p2t, p3t, p4t); const bMaxT = Math.max(p1t, p2t, p3t, p4t);
+        const bMinP = Math.min(p1p, p2p, p3p, p4p); const bMaxP = Math.max(p1p, p2p, p3p, p4p);
+        const timeOverlap = bMaxT >= minTime && bMinT <= maxTime;
+        const priceOverlap = bMaxP >= minPrice && bMinP <= maxPrice;
+        let isVisible = timeOverlap && priceOverlap;
+        let screenPoints: ScreenPoint[] | undefined = undefined;
+        if (isVisible) {
+          const x1 = timeScale.timeToCoordinate(data.points.p1.time);
+          const y1 = series.priceToCoordinate(data.points.p1.price);
+          const x2 = timeScale.timeToCoordinate(data.points.p2.time);
+          const y2 = series.priceToCoordinate(data.points.p2.price);
+          const x3 = timeScale.timeToCoordinate(data.points.p3.time);
+          const y3 = series.priceToCoordinate(data.points.p3.price);
+          const x4 = timeScale.timeToCoordinate(data.points.p4.time);
+          const y4 = series.priceToCoordinate(data.points.p4.price);
+          if (x1 == null || y1 == null || x2 == null || y2 == null || x3 == null || y3 == null || x4 == null || y4 == null) {
+            isVisible = false;
+          } else {
+            screenPoints = [
+              { x: x1 as number, y: y1 as number },
+              { x: x2 as number, y: y2 as number },
+              { x: x3 as number, y: y3 as number },
+              { x: x4 as number, y: y4 as number },
+            ];
+          }
+        }
+        drawings.push({
+          id: data.id,
+          type: 'rectangle',
+          isVisible,
+          style: { fillColor: data.fillColor, fillOpacity: data.fillOpacity, borderColor: data.borderColor, borderWidth: data.borderWidth },
+          data: {
+            topLeftCorner: { time: p1t, price: p1p },
+            topRightCorner: { time: p2t, price: p2p },
+            bottomRightCorner: { time: p3t, price: p3p },
+            bottomLeftCorner: { time: p4t, price: p4p },
+          },
+          bounds: { minTime: bMinT, maxTime: bMaxT, minPrice: bMinP, maxPrice: bMaxP },
+          ...(screenPoints ? { screenPoints } : {}),
+        });
+      });
+
+      // Labels
+      const labels = labelManagerRef.current ? labelManagerRef.current.getAllLabels() : [];
+      labels.forEach((lp) => {
+        const opt = (lp as any).options as any;
+        const t = opt.time as number; const p = opt.price as number;
+        const bMinT = t; const bMaxT = t; const bMinP = p; const bMaxP = p;
+        const timeOverlap = bMaxT >= minTime && bMinT <= maxTime;
+        const priceOverlap = bMaxP >= minPrice && bMinP <= maxPrice;
+        let isVisible = timeOverlap && priceOverlap;
+        let screenPoints: ScreenPoint[] | undefined = undefined;
+        if (isVisible) {
+          const x = timeScale.timeToCoordinate(opt.time);
+          const y = series.priceToCoordinate(opt.price);
+          if (x == null || y == null) {
+            isVisible = false;
+          } else {
+            screenPoints = [{ x: x as number, y: y as number }];
+          }
+        }
+        drawings.push({
+          id: opt.id,
+          type: 'label',
+          isVisible,
+          style: { color: opt.color, fontSize: opt.fontSize },
+          data: { anchor: { time: t, price: p }, text: opt.text },
+          bounds: { minTime: bMinT, maxTime: bMaxT, minPrice: bMinP, maxPrice: bMaxP },
+          ...(screenPoints ? { screenPoints } : {}),
+        });
+      });
+
+      return {
+        timeRange: { minTime, maxTime, centerTime },
+        priceRangeVisible: { minPrice, maxPrice, centerPrice },
+        cadenceSec,
+        barsVisibleEstimate,
+        drawings,
       };
     },
 
