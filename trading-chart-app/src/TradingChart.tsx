@@ -1,19 +1,32 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
-import {
-  createChart,
-  IChartApi,
-  ISeriesApi,
-  CandlestickData,
-  Time,
-  ColorType,
-  CandlestickSeriesOptions,
-  DeepPartial
-} from 'lightweight-charts';
-import { MockPolygonWebSocket, PolygonAggregateBar } from './MockPolygonWebSocket';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, BarData, Time, LineStyle, DeepPartial, ChartOptions, LineData } from 'lightweight-charts';
 import { TrendLineManager, TrendLineOptions } from './TrendLinePrimitive';
 import { RectangleManager, RectangleData } from './RectanglePrimitive';
 import { LabelManager, LabelOptions } from './LabelPrimitive';
-import { TrendLineData } from './DrawingControls';
+
+
+export interface TrendLineData {
+  id: string;
+  point1: {
+    time: Time;
+    price: number;
+  };
+  point2: {
+    time: Time;
+    price: number;
+  };
+  color: string;
+  lineWidth?: number;
+  lineStyle?: number; // 0 = solid, 1 = dotted, 2 = dashed
+}
+
+export interface LabelData {
+  id: string;
+  time: Time;
+  price: number;
+  text: string;
+  color?: string;
+}
 
 interface TradingChartProps {
   symbol?: string;
@@ -45,12 +58,19 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
   ({ symbol = 'AAPL', initialPrice = 150.00, backgroundColor = '#1e1e1e', textColor = '#d1d4dc', onDataRangeChange }, ref) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const wsRef = useRef<MockPolygonWebSocket | null>(null);
+  const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+  const timeExtensionSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+  const chartDataRef = useRef<CandlestickData[]>([]);
+  const currentPriceRef = useRef<number>(initialPrice);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const trendLineManagerRef = useRef<TrendLineManager | null>(null);
   const rectangleManagerRef = useRef<RectangleManager | null>(null);
   const labelManagerRef = useRef<LabelManager | null>(null);
-  const chartDataRef = useRef<CandlestickData[]>([]);
+  const hasNotifiedDataRangeRef = useRef<boolean>(false);
+  const timeExtensionPointsRef = useRef(new Map<string, LineData[]>());
+  const lockedVisibleRangeRef = useRef<{ from: Time; to: Time } | null>(null);
+  const isUpdatingExtensionRef = useRef(false);
+  const barIntervalSecRef = useRef<number>(900);
 
   // Helper function to notify data range changes
   const notifyDataRangeChange = () => {
@@ -78,108 +98,190 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     }
   };
 
-  // Helper function to extend time scale for trend lines
-  const extendTimeScaleForTrendLines = () => {
-    if (!chartRef.current || !trendLineManagerRef.current) return;
-    
-    const furthestTime = trendLineManagerRef.current.getFurthestTime();
-    if (!furthestTime) {
-      // No trend lines, just fit to data
-      chartRef.current.timeScale().fitContent();
-      return;
+  // Compute dominant cadence (seconds) from current data
+  const computeCadenceSec = (data: CandlestickData[]): number => {
+    if (!data || data.length < 2) return barIntervalSecRef.current;
+    const times = data.map(d => d.time as number).sort((a, b) => a - b);
+    const diffs: number[] = [];
+    for (let i = 1; i < times.length; i++) {
+      const delta = times[i] - times[i - 1];
+      if (delta > 0) diffs.push(delta);
     }
-    
-    // Get current data range
-    const data = chartDataRef.current;
-    if (data.length === 0) return;
-    
-    const dataMinTime = Math.min(...data.map(d => d.time as number));
-    const dataMaxTime = Math.max(...data.map(d => d.time as number));
-    
-    // Calculate extended range (use furthest trend line time or data max, whichever is later)
-    const extendedMaxTime = Math.max(dataMaxTime, furthestTime);
-    
-    // Set visible range with some padding
-    const padding = (extendedMaxTime - dataMinTime) * 0.05; // 5% padding
-    chartRef.current.timeScale().setVisibleRange({
-      from: (dataMinTime - padding) as Time,
-      to: (extendedMaxTime + padding) as Time
-    });
+    if (diffs.length === 0) return barIntervalSecRef.current;
+    const counts: { [delta: number]: number } = {};
+    for (const d of diffs) counts[d] = (counts[d] ?? 0) + 1;
+    let mode = diffs[0];
+    let maxC = 0;
+    for (const k in counts) {
+      const v = counts[k as any];
+      if (v > maxC) { maxC = v; mode = Number(k); }
+    }
+    return mode;
   };
 
-  // Helper function to extend time scale for any shape before adding it
-  const extendTimeScaleForShape = (shapeMinTime: number, shapeMaxTime: number) => {
-    if (!chartRef.current || !seriesRef.current || chartDataRef.current.length === 0) {
-      return;
+  // Helper function to update the time extension series
+  const updateTimeExtensionSeries = () => {
+    if (!timeExtensionSeriesRef.current || !chartRef.current) return;
+
+    // Capture current visible range BEFORE updating extension series
+    const currentVisibleRange = chartRef.current.timeScale().getVisibleRange();
+    
+    // Collect all points from all drawings
+    const allPoints: LineData[] = [];
+    
+    timeExtensionPointsRef.current.forEach((points) => {
+      allPoints.push(...points);
+    });
+
+    // Sort by time and remove duplicates
+    const uniquePoints = allPoints
+      .sort((a, b) => (a.time as number) - (b.time as number))
+      .filter((point, index, array) => 
+        index === 0 || (point.time as number) !== (array[index - 1].time as number)
+      );
+
+    
+    // Set flag to indicate we're updating extensions
+    isUpdatingExtensionRef.current = true;
+    
+    // Update the time extension series
+    timeExtensionSeriesRef.current.setData(uniquePoints);
+    // Reset update flag
+    isUpdatingExtensionRef.current = false;
+  };
+
+  // Helper function to add time extension for a drawing
+  const addTimeExtensionForDrawing = (drawingId: string, minTime: number, maxTime: number) => {
+    if (!chartRef.current || chartDataRef.current.length === 0) return;
+    
+    const dataMinTime = Math.min(...chartDataRef.current.map(d => d.time as number));
+    const dataMaxTime = Math.max(...chartDataRef.current.map(d => d.time as number));
+    
+    // Get first and last candle prices to use for extensions
+    const sortedData = [...chartDataRef.current].sort((a, b) => (a.time as number) - (b.time as number));
+    const firstCandle = sortedData[0];
+    const lastCandle = sortedData[sortedData.length - 1];
+    
+    // Use close prices from the edge candles for extension points
+    const firstPrice = firstCandle.close || 100;
+    const lastPrice = lastCandle.close || 100;
+    
+    const extensionPoints: LineData[] = [];
+    
+    // Generate extension points using detected bar cadence
+    const interval = barIntervalSecRef.current;
+    
+    // Add points BEFORE data range if needed
+    if (minTime < dataMinTime) {
+      for (let time = minTime; time < dataMinTime; time += interval) {
+        extensionPoints.push({ time: time as Time, value: firstPrice });
+      }
+      // Ensure exact left endpoint exists
+      if (extensionPoints.length === 0 || (extensionPoints[0].time as number) !== minTime) {
+        extensionPoints.push({ time: minTime as Time, value: firstPrice });
+      }
     }
     
-    // Get current data range
+    // Add points AFTER data range if needed
+    if (maxTime > dataMaxTime) {
+      for (let time = dataMaxTime + interval; time <= maxTime; time += interval) {
+        extensionPoints.push({ time: time as Time, value: lastPrice });
+      }
+      // Ensure exact endpoint exists on time scale
+      if (extensionPoints.length === 0 || (extensionPoints[extensionPoints.length - 1].time as number) !== maxTime) {
+        extensionPoints.push({ time: maxTime as Time, value: lastPrice });
+      }
+    }
+    
+    if (extensionPoints.length > 0) {
+      timeExtensionPointsRef.current.set(drawingId, extensionPoints);
+      updateTimeExtensionSeries();
+      
+      // Don't auto-zoom - let user control the view
+      // This prevents candlesticks from shifting when adding drawings
+    }
+  };
+
+  // Helper to add time extensions for arbitrary exact times (inside or outside data range)
+  const addTimeExtensionsForTimes = (drawingId: string, times: number[]) => {
+    if (!chartRef.current || chartDataRef.current.length === 0) return;
+
     const dataMinTime = Math.min(...chartDataRef.current.map(d => d.time as number));
     const dataMaxTime = Math.max(...chartDataRef.current.map(d => d.time as number));
 
-    
-    // If shape extends beyond data, add whitespace data points
-    if (shapeMaxTime > dataMaxTime || shapeMinTime < dataMinTime) {
+    // Get first and last candle prices to use for extensions
+    const sortedData = [...chartDataRef.current].sort((a, b) => (a.time as number) - (b.time as number));
+    const firstCandle = sortedData[0];
+    const lastCandle = sortedData[sortedData.length - 1];
 
-      
-      // Get current data
-      const currentData = [...chartDataRef.current];
-      const whitespaceData: any[] = []; // Using any[] for whitespace data
-      
-      // Add whitespace data at 15-minute intervals beyond current range
-      if (shapeMaxTime > dataMaxTime) {
+    const firstPrice = firstCandle.close || 100;
+    const lastPrice = lastCandle.close || 100;
 
-        let time = dataMaxTime + 900; // Start 15 minutes after last data
-        while (time <= shapeMaxTime + 900) { // Add one extra point beyond line
-          whitespaceData.push({ time: time as Time });
+    const interval = barIntervalSecRef.current;
 
-          time += 900; // 15 minute intervals
-        }
+    // Unique sorted times
+    const uniqueTimes = Array.from(new Set(times)).sort((a, b) => a - b);
+
+    const leftTimes = uniqueTimes.filter(t => t < dataMinTime);
+    const rightTimes = uniqueTimes.filter(t => t > dataMaxTime);
+    const insideTimes = uniqueTimes.filter(t => t >= dataMinTime && t <= dataMaxTime);
+
+    const extensionPoints: LineData[] = [];
+
+    // Extend left side with cadence and ensure exact left times exist
+    if (leftTimes.length > 0) {
+      const leftMin = Math.min(...leftTimes);
+      for (let t = leftMin; t < dataMinTime; t += interval) {
+        extensionPoints.push({ time: t as Time, value: firstPrice });
       }
-      
-      if (shapeMinTime < dataMinTime) {
-
-        let time = dataMinTime - 900; // Start 15 minutes before first data
-        while (time >= shapeMinTime - 900) { // Add one extra point before line
-          whitespaceData.unshift({ time: time as Time });
-
-          time -= 900; // 15 minute intervals
-        }
-      }
-      
-      // Combine whitespace with existing data and sort by time
-      const combinedData = [...whitespaceData, ...currentData].sort((a, b) => 
-        (a.time as number) - (b.time as number)
-      );
-      
-
-      
-      // Update chart data reference
-      chartDataRef.current = combinedData;
-      
-      // Update series with new data
-      seriesRef.current.setData(combinedData);
-      
-      // Now set visible range to show the trend line
-      const padding = (shapeMaxTime - shapeMinTime) * 0.05; // 5% padding
-      chartRef.current.timeScale().setVisibleRange({
-        from: (shapeMinTime - padding) as Time,
-        to: (shapeMaxTime + padding) as Time
+      leftTimes.forEach((t) => {
+        extensionPoints.push({ time: t as Time, value: firstPrice });
       });
-      
+    }
+
+    // Extend right side with cadence and ensure exact right times exist
+    if (rightTimes.length > 0) {
+      const rightMax = Math.max(...rightTimes);
+      for (let t = dataMaxTime + interval; t <= rightMax; t += interval) {
+        extensionPoints.push({ time: t as Time, value: lastPrice });
+      }
+      rightTimes.forEach((t) => {
+        extensionPoints.push({ time: t as Time, value: lastPrice });
+      });
+    }
+
+    // Ensure inside-range exact times exist on the time scale
+    insideTimes.forEach((t) => {
+      extensionPoints.push({ time: t as Time, value: lastPrice });
+    });
+
+    if (extensionPoints.length > 0) {
+      timeExtensionPointsRef.current.set(drawingId, extensionPoints);
+      updateTimeExtensionSeries();
     }
   };
+
+  // Helper function to remove time extension for a drawing
+  const removeTimeExtensionForDrawing = (drawingId: string) => {
+    timeExtensionPointsRef.current.delete(drawingId);
+    updateTimeExtensionSeries();
+  };
+
+
 
   // Expose methods to parent component
   useImperativeHandle(ref, () => ({
     addTrendLine: (lineData: TrendLineData) => {
       if (trendLineManagerRef.current && chartRef.current) {
-        // FIRST: Extend time scale if needed (before adding the trend line)
-        const minTime = Math.min(lineData.point1.time as number, lineData.point2.time as number);
-        const maxTime = Math.max(lineData.point1.time as number, lineData.point2.time as number);
-        extendTimeScaleForShape(minTime, maxTime);
+        // Log before adding trend line
         
-        // THEN: Add the trend line (it will now have valid coordinates)
+        // FIRST: Inject exact endpoint times (inside or outside range)
+        addTimeExtensionsForTimes(lineData.id, [
+          lineData.point1.time as number,
+          lineData.point2.time as number,
+        ]);
+        
+        // THEN: Add the trend line
         const trendLineOptions: TrendLineOptions = {
           point1: lineData.point1,
           point2: lineData.point2,
@@ -190,6 +292,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           showLabel: true
         };
         trendLineManagerRef.current.addTrendLine(trendLineOptions);
+        
+        // Log after adding trend line
         
         // Simple refresh to ensure visibility
         setTimeout(() => {
@@ -204,33 +308,38 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     removeTrendLine: (id: string) => {
       if (trendLineManagerRef.current) {
         trendLineManagerRef.current.removeTrendLine(id);
-        // Auto-refresh after removal and recalculate time scale
-        if (chartRef.current) {
-          extendTimeScaleForTrendLines();
-          setTimeout(() => {
-            if (chartRef.current && chartContainerRef.current) {
-              chartRef.current.applyOptions({ 
-                width: chartContainerRef.current.clientWidth 
-              });
-            }
-          }, 10);
-        }
+        removeTimeExtensionForDrawing(id);
+        // Auto-refresh after removal
+        setTimeout(() => {
+          if (chartRef.current && chartContainerRef.current) {
+            chartRef.current.applyOptions({ 
+              width: chartContainerRef.current.clientWidth 
+            });
+          }
+        }, 10);
       }
     },
     removeAllTrendLines: () => {
       if (trendLineManagerRef.current) {
         trendLineManagerRef.current.removeAllTrendLines();
-        // Auto-refresh after removal and reset time scale to data only
-        if (chartRef.current) {
-          chartRef.current.timeScale().fitContent(); // Back to data-only view
-          setTimeout(() => {
-            if (chartRef.current && chartContainerRef.current) {
-              chartRef.current.applyOptions({ 
-                width: chartContainerRef.current.clientWidth 
-              });
-            }
-          }, 10);
-        }
+        // Clear all time extensions for trend lines
+        const keysToRemove: string[] = [];
+        timeExtensionPointsRef.current.forEach((_, key) => {
+          if (key.startsWith('trendline-')) {
+            keysToRemove.push(key);
+          }
+        });
+        keysToRemove.forEach(key => timeExtensionPointsRef.current.delete(key));
+        updateTimeExtensionSeries();
+        
+        // Auto-refresh after removal
+        setTimeout(() => {
+          if (chartRef.current && chartContainerRef.current) {
+            chartRef.current.applyOptions({ 
+              width: chartContainerRef.current.clientWidth 
+            });
+          }
+        }, 10);
       }
     },
     addRectangle: (rectangleData: RectangleData) => {
@@ -242,13 +351,10 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           rectangleData.points.p3.time as number,
           rectangleData.points.p4.time as number
         ];
-        const minTime = Math.min(...times);
-        const maxTime = Math.max(...times);
+        // Inject exact all-corner times (handles tilted/off-cadence rectangles)
+        addTimeExtensionsForTimes(rectangleData.id, times);
         
-        // Extend time scale if needed
-        extendTimeScaleForShape(minTime, maxTime);
-        
-        // THEN: Add the rectangle (it will now have valid coordinates)
+        // THEN: Add the rectangle
         rectangleManagerRef.current.addRectangle(rectangleData);
         
         // Simple refresh to ensure visibility
@@ -264,6 +370,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     removeRectangle: (id: string) => {
       if (rectangleManagerRef.current) {
         rectangleManagerRef.current.removeRectangle(id);
+        removeTimeExtensionForDrawing(id);
         // Auto-refresh after removal
         setTimeout(() => {
           if (chartRef.current && chartContainerRef.current) {
@@ -276,8 +383,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     },
     addLabel: (labelData: { time: Time; price: number; text: string; id: string }) => {
       if (labelManagerRef.current && chartRef.current) {
-        // FIRST: Extend time scale if needed (before adding the label)
-        extendTimeScaleForShape(labelData.time as number, labelData.time as number);
+        // FIRST: Inject exact label time (inside or outside range)
+        addTimeExtensionsForTimes(labelData.id, [labelData.time as number]);
         
         // THEN: Add the label
         const labelOptions: LabelOptions = {
@@ -289,7 +396,6 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           id: labelData.id
         };
         labelManagerRef.current.addLabel(labelOptions);
-        console.log('[TradingChart] Label added via ref:', labelData.id);
         
         // Simple refresh to ensure visibility (same as trend lines and rectangles)
         setTimeout(() => {
@@ -304,7 +410,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     removeLabel: (id: string) => {
       if (labelManagerRef.current) {
         labelManagerRef.current.removeLabel(id);
-        console.log('[TradingChart] Label removed:', id);
+        removeTimeExtensionForDrawing(id);
       }
     },
     getDataRange: (): ChartDataRange | null => {
@@ -366,6 +472,18 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     
     seriesRef.current = candlestickSeries;
     
+    // Create invisible line series for time extension
+    const timeExtensionSeries = chart.addLineSeries({
+      color: 'transparent',
+      lineWidth: 1,
+      lineVisible: false,
+      priceLineVisible: false,
+      lastValueVisible: false,
+      crosshairMarkerVisible: false,
+    });
+    
+    timeExtensionSeriesRef.current = timeExtensionSeries;
+    
     // Initialize trend line manager
     trendLineManagerRef.current = new TrendLineManager(candlestickSeries);
     
@@ -396,9 +514,11 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       
       let price = initialPrice;
       
-      // Create data points every 15 minutes for 24 hours
-      for (let i = 0; i < 96; i++) {
-        const utcTime = startTime + (i * 15 * 60); // 15 minute intervals in UTC
+      // Create data points every 5 minutes for 24 hours
+      const mockIntervalSec = 5 * 60; // 5-minute cadence for testing
+      const bars = Math.floor((24 * 60 * 60) / mockIntervalSec);
+      for (let i = 0; i < bars; i++) {
+        const utcTime = startTime + (i * mockIntervalSec);
         
         // Convert UTC to "fake UTC" that displays as EST
         // Subtract 4 hours (14400 seconds) for EDT offset
@@ -434,6 +554,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     // Store data for range calculation
     chartDataRef.current = sampleData;
     candlestickSeries.setData(sampleData);
+    // Detect and store bar cadence from data
+    barIntervalSecRef.current = computeCadenceSec(sampleData);
     
     // Listen for visible range changes to update data range
     chart.timeScale().subscribeVisibleTimeRangeChange(() => {
@@ -446,9 +568,67 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     // Notify parent of data range
     notifyDataRangeChange();
     
+    // Start live simulation
+    let simulatedTime = sampleData[sampleData.length - 1].time as number;
+    
+    const startLiveSimulation = () => {
+      intervalRef.current = setInterval(() => {
+        if (!seriesRef.current || chartDataRef.current.length === 0) return;
+        
+        const currentData = [...chartDataRef.current];
+        const lastCandle = currentData[currentData.length - 1];
+        
+        // Increment simulated time for next candle
+        simulatedTime += barIntervalSecRef.current;
+        
+        // Don't create candles beyond our simulation window
+        
+        // Create new candle every update (simulating 15-minute intervals)
+        const newCandle: CandlestickData = {
+          time: simulatedTime as Time,
+          open: lastCandle.close,
+          high: lastCandle.close,
+          low: lastCandle.close,
+          close: lastCandle.close
+        };
+        currentData.push(newCandle);
+        currentPriceRef.current = lastCandle.close;
+        
+        // Update current candle with price movement
+        const currentCandle = currentData[currentData.length - 1];
+        
+        // Simulate realistic price movement
+        const volatility = 0.002; // 0.2% volatility
+        const trend = Math.random() > 0.5 ? 1 : -1;
+        const priceChange = currentPriceRef.current * volatility * trend * Math.random();
+        const newPrice = currentPriceRef.current + priceChange;
+        
+        // Update candle
+        currentCandle.close = newPrice;
+        currentCandle.high = Math.max(currentCandle.high, newPrice);
+        currentCandle.low = Math.min(currentCandle.low, newPrice);
+        
+        // Update current price reference
+        currentPriceRef.current = newPrice;
+        
+        // Update chart
+        chartDataRef.current = currentData;
+        seriesRef.current.setData(currentData);
+        
+        // Notify parent of data range change
+        notifyDataRangeChange();
+      }, 500); // Update every 2 seconds
+    };
+    
+    // Start the simulation after initial data is loaded
+    startLiveSimulation();
+    
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
       chart.remove();
     };
   }, [symbol, initialPrice]);

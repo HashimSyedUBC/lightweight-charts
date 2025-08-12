@@ -25,7 +25,6 @@ export class LabelPrimitive implements ISeriesPrimitive<Time> {
   constructor(options: LabelOptions) {
     this._options = options;
     this._paneViews = [];
-    console.log('[Label] Primitive created:', options.id, options.text);
   }
 
   updateOptions(options: Partial<LabelOptions>): void {
@@ -95,7 +94,6 @@ class LabelPaneView implements ISeriesPrimitivePaneView {
     const x = timeScale.timeToCoordinate(options.time);
 
     this._point = { x, y };
-    console.log('[Label] Coordinates updated:', { x, y, text: options.text });
   }
 
   renderer(): LabelRenderer | null {
@@ -164,7 +162,6 @@ class LabelRenderer {
       const textY = yScaled + arrowHeight + (5 * scope.verticalPixelRatio);
       ctx.fillText(this._options.text, xScaled, textY);
       
-      console.log('[Label] Arrow and text drawn:', this._options.text);
     });
   }
 
@@ -181,7 +178,6 @@ export class LabelManager {
   constructor(series: any) {
     this._series = series;
     this._labels = new Map();
-    console.log('[LabelManager] Initialized');
   }
 
   addLabel(options: LabelOptions): void {
@@ -192,7 +188,6 @@ export class LabelManager {
       const label = new LabelPrimitive(options);
       this._series.attachPrimitive(label);
       this._labels.set(options.id, label);
-      console.log('[LabelManager] Label added, total:', this._labels.size);
     }
   }
 
@@ -201,7 +196,6 @@ export class LabelManager {
     if (label) {
       this._series.detachPrimitive(label);
       this._labels.delete(id);
-      console.log('[LabelManager] Label removed, remaining:', this._labels.size);
     }
   }
 
@@ -210,7 +204,6 @@ export class LabelManager {
       this._series.detachPrimitive(label);
     });
     this._labels.clear();
-    console.log('[LabelManager] All labels removed');
   }
 
   getLabel(id: string): LabelPrimitive | undefined {
