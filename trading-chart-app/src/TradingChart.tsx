@@ -75,6 +75,7 @@ export interface TradingChartRef {
   removeLabel: (id: string) => void;
   getDataRange: () => ChartDataRange | null;
   getViewport: () => ViewportState | null;
+  centerOnTime: (time: number) => { changed: boolean; before: any; after: any } | null;
 }
 
 export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
@@ -638,6 +639,93 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         barsVisibleEstimate,
         drawings,
       };
+    },
+
+    centerOnTime: (time: number) => {
+      const chart = chartRef.current;
+      if (!chart || !seriesRef.current) return null;
+
+      // Get before state
+      const before = (() => {
+        const vp = chartRef.current?.timeScale().getVisibleRange();
+        if (!vp) return null;
+        const minT = vp.from as number;
+        const maxT = vp.to as number;
+        const centerT = (minT + maxT) / 2;
+        
+        // Get price range using coordinate conversion
+        const containerHeight = chartContainerRef.current?.clientHeight || 0;
+        let minP = 0, maxP = 0;
+        if (containerHeight > 0) {
+          const topPrice = seriesRef.current?.coordinateToPrice(0);
+          const bottomPrice = seriesRef.current?.coordinateToPrice(containerHeight);
+          if (topPrice !== null && bottomPrice !== null) {
+            maxP = topPrice as number;
+            minP = bottomPrice as number;
+          }
+        }
+        const centerP = (minP + maxP) / 2;
+        
+        const cadence = computeCadenceSec(chartDataRef.current);
+        const bars = cadence > 0 ? Math.floor((maxT - minT) / cadence) : 0;
+        
+        return {
+          timeRange: { minTime: minT, maxTime: maxT, centerTime: centerT },
+          priceRangeVisible: { minPrice: minP, maxPrice: maxP, centerPrice: centerP },
+          barsVisibleEstimate: bars
+        };
+      })();
+
+      if (!before) return null;
+
+      // Calculate new range maintaining same span
+      const currentSpan = before.timeRange.maxTime - before.timeRange.minTime;
+      const newFrom = time - currentSpan / 2;
+      const newTo = time + currentSpan / 2;
+
+      // Apply new range
+      chart.timeScale().setVisibleRange({ 
+        from: newFrom as Time, 
+        to: newTo as Time 
+      });
+
+      // Get after state
+      const after = (() => {
+        const vp = chart.timeScale().getVisibleRange();
+        if (!vp) return null;
+        const minT = vp.from as number;
+        const maxT = vp.to as number;
+        const centerT = (minT + maxT) / 2;
+        
+        // Get price range using coordinate conversion
+        const containerHeight = chartContainerRef.current?.clientHeight || 0;
+        let minP = 0, maxP = 0;
+        if (containerHeight > 0) {
+          const topPrice = seriesRef.current?.coordinateToPrice(0);
+          const bottomPrice = seriesRef.current?.coordinateToPrice(containerHeight);
+          if (topPrice !== null && bottomPrice !== null) {
+            maxP = topPrice as number;
+            minP = bottomPrice as number;
+          }
+        }
+        const centerP = (minP + maxP) / 2;
+        
+        const cadence = computeCadenceSec(chartDataRef.current);
+        const bars = cadence > 0 ? Math.floor((maxT - minT) / cadence) : 0;
+        
+        return {
+          timeRange: { minTime: minT, maxTime: maxT, centerTime: centerT },
+          priceRangeVisible: { minPrice: minP, maxPrice: maxP, centerPrice: centerP },
+          barsVisibleEstimate: bars
+        };
+      })();
+
+      if (!after) return null;
+
+      // Check if actually changed
+      const changed = Math.abs(after.timeRange.centerTime - before.timeRange.centerTime) > 0.1;
+
+      return { changed, before, after };
     },
 
   }), []);

@@ -392,6 +392,95 @@ function App() {
           >
             🧭 Log Viewport
           </button>
+          <button
+            onClick={() => {
+              if (chartRef.current && dataRange) {
+                // Left edge - 25% into the data range
+                const targetTime = dataRange.minTime + (dataRange.maxTime - dataRange.minTime) * 0.25;
+                const result = chartRef.current.centerOnTime(targetTime);
+                console.log('centerOnTime LEFT EDGE result:', result);
+                if (result) {
+                  console.log('Target UTC:', new Date(targetTime * 1000).toISOString());
+                  console.log('Changed:', result.changed);
+                  console.log('Before center:', new Date(result.before.timeRange.centerTime * 1000).toISOString());
+                  console.log('After center:', new Date(result.after.timeRange.centerTime * 1000).toISOString());
+                }
+              }
+            }}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#4ecdc4' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '13px',
+              marginRight: '4px'
+            }}
+          >
+            ⬅️ Left Edge<br/>
+            {dataRange ? new Date((dataRange.minTime + (dataRange.maxTime - dataRange.minTime) * 0.25) * 1000).toISOString().slice(0, 16) + 'Z' : ''}
+          </button>
+          <button
+            onClick={() => {
+              if (chartRef.current && dataRange) {
+                // Center on middle of data range
+                const targetTime = Math.floor((dataRange.minTime + dataRange.maxTime) / 2);
+                const result = chartRef.current.centerOnTime(targetTime);
+                console.log('centerOnTime MIDDLE result:', result);
+                if (result) {
+                  console.log('Target UTC:', new Date(targetTime * 1000).toISOString());
+                  console.log('Changed:', result.changed);
+                  console.log('Before center:', new Date(result.before.timeRange.centerTime * 1000).toISOString());
+                  console.log('After center:', new Date(result.after.timeRange.centerTime * 1000).toISOString());
+                }
+              }
+            }}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#ff6b6b' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '13px',
+              marginRight: '4px'
+            }}
+          >
+            🎯 Middle<br/>
+            {dataRange ? new Date(((dataRange.minTime + dataRange.maxTime) / 2) * 1000).toISOString().slice(0, 16) + 'Z' : ''}
+          </button>
+          <button
+            onClick={() => {
+              if (chartRef.current && dataRange) {
+                // Right edge - 75% into the data range  
+                const targetTime = dataRange.minTime + (dataRange.maxTime - dataRange.minTime) * 0.75;
+                const result = chartRef.current.centerOnTime(targetTime);
+                console.log('centerOnTime RIGHT EDGE result:', result);
+                if (result) {
+                  console.log('Target UTC:', new Date(targetTime * 1000).toISOString());
+                  console.log('Changed:', result.changed);
+                  console.log('Before center:', new Date(result.before.timeRange.centerTime * 1000).toISOString());
+                  console.log('After center:', new Date(result.after.timeRange.centerTime * 1000).toISOString());
+                }
+              }
+            }}
+            disabled={!dataRange}
+            style={{
+              padding: '8px 16px',
+              backgroundColor: dataRange ? '#f06292' : '#666',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: dataRange ? 'pointer' : 'not-allowed',
+              fontSize: '13px'
+            }}
+          >
+            ➡️ Right Edge<br/>
+            {dataRange ? new Date((dataRange.minTime + (dataRange.maxTime - dataRange.minTime) * 0.75) * 1000).toISOString().slice(0, 16) + 'Z' : ''}
+          </button>
         </div>
         
         <div style={{ 
