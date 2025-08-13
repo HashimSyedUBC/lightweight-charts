@@ -1,7 +1,7 @@
 import {
   ISeriesPrimitive,
-  ISeriesPrimitivePaneView,
-  SeriesPrimitivePaneViewZOrder,
+  IPrimitivePaneView,
+  PrimitivePaneViewZOrder,
   Time,
   PrimitiveHoveredItem
 } from 'lightweight-charts';
@@ -34,7 +34,7 @@ export class LabelPrimitive implements ISeriesPrimitive<Time> {
     }
   }
 
-  paneViews(): readonly ISeriesPrimitivePaneView[] {
+  paneViews(): readonly IPrimitivePaneView[] {
     return this._paneViews;
   }
 
@@ -72,7 +72,7 @@ interface ViewPoint {
   y: number | null;
 }
 
-class LabelPaneView implements ISeriesPrimitivePaneView {
+class LabelPaneView implements IPrimitivePaneView {
   private _source: LabelPrimitive;
   private _point: ViewPoint = { x: null, y: null };
 
@@ -109,7 +109,7 @@ class LabelPaneView implements ISeriesPrimitivePaneView {
     );
   }
 
-  zOrder(): SeriesPrimitivePaneViewZOrder {
+  zOrder(): PrimitivePaneViewZOrder {
     return 'normal';
   }
 }

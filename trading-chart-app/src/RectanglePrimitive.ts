@@ -1,8 +1,8 @@
 import {
   ISeriesPrimitive,
   SeriesAttachedParameter,
-  ISeriesPrimitivePaneView,
-  ISeriesPrimitivePaneRenderer,
+  IPrimitivePaneView,
+  IPrimitivePaneRenderer,
   PrimitiveHoveredItem,
   Time,
 } from 'lightweight-charts';
@@ -41,7 +41,7 @@ export class RectanglePrimitive implements ISeriesPrimitive<Time> {
     }
   }
 
-  paneViews(): readonly ISeriesPrimitivePaneView[] {
+  paneViews(): readonly IPrimitivePaneView[] {
     return this._paneViews;
   }
 
@@ -79,7 +79,7 @@ interface ViewPoint {
   y: number | null;
 }
 
-class RectanglePaneView implements ISeriesPrimitivePaneView {
+class RectanglePaneView implements IPrimitivePaneView {
   private _source: RectanglePrimitive;
   private _p1: ViewPoint = { x: null, y: null };
   private _p2: ViewPoint = { x: null, y: null };
@@ -116,7 +116,7 @@ class RectanglePaneView implements ISeriesPrimitivePaneView {
     this._p4 = { x: x4, y: y4 };
   }
 
-  renderer(): ISeriesPrimitivePaneRenderer | null {
+  renderer(): IPrimitivePaneRenderer | null {
     if (
       this._p1.x === null || this._p1.y === null ||
       this._p2.x === null || this._p2.y === null ||
@@ -133,7 +133,7 @@ class RectanglePaneView implements ISeriesPrimitivePaneView {
   }
 }
 
-class RectangleRenderer implements ISeriesPrimitivePaneRenderer {
+class RectangleRenderer implements IPrimitivePaneRenderer {
   private _p1: ViewPoint;
   private _p2: ViewPoint;
   private _p3: ViewPoint;

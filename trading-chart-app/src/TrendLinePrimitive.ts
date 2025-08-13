@@ -1,8 +1,8 @@
 import {
   ISeriesPrimitive,
-  ISeriesPrimitivePaneView,
-  ISeriesPrimitivePaneRenderer,
-  SeriesPrimitivePaneViewZOrder,
+  IPrimitivePaneView,
+  IPrimitivePaneRenderer,
+  PrimitivePaneViewZOrder,
   Time,
   Coordinate,
   PrimitiveHoveredItem
@@ -43,7 +43,7 @@ export class TrendLinePrimitive implements ISeriesPrimitive<Time> {
     }
   }
 
-  paneViews(): readonly ISeriesPrimitivePaneView[] {
+  paneViews(): readonly IPrimitivePaneView[] {
     return this._paneViews;
   }
 
@@ -83,7 +83,7 @@ interface ViewPoint {
   y: number | null;
 }
 
-class TrendLinePaneView implements ISeriesPrimitivePaneView {
+class TrendLinePaneView implements IPrimitivePaneView {
   private _source: TrendLinePrimitive;
   private _p1: ViewPoint = { x: null, y: null };
   private _p2: ViewPoint = { x: null, y: null };
@@ -130,7 +130,7 @@ class TrendLinePaneView implements ISeriesPrimitivePaneView {
     );
   }
 
-  zOrder(): SeriesPrimitivePaneViewZOrder {
+  zOrder(): PrimitivePaneViewZOrder {
     return 'normal';
   }
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, BarData, Time, LineStyle, DeepPartial, ChartOptions, LineData } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, BarData, Time, LineStyle, DeepPartial, ChartOptions, LineData, CandlestickSeries, LineSeries } from 'lightweight-charts';
 import { TrendLineManager, TrendLineOptions } from './TrendLinePrimitive';
 import { RectangleManager, RectangleData } from './RectanglePrimitive';
 import { LabelManager, LabelOptions } from './LabelPrimitive';
@@ -590,10 +590,10 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
           isVisible,
           style: { fillColor: data.fillColor, fillOpacity: data.fillOpacity, borderColor: data.borderColor, borderWidth: data.borderWidth },
           data: {
-            topLeftCorner: { time: unixToUTC(p1t), price: p1p },
-            topRightCorner: { time: unixToUTC(p2t), price: p2p },
-            bottomRightCorner: { time: unixToUTC(p3t), price: p3p },
-            bottomLeftCorner: { time: unixToUTC(p4t), price: p4p },
+            bottomLeftCorner: { time: unixToUTC(p1t), price: p1p },
+            bottomRightCorner: { time: unixToUTC(p2t), price: p2p },
+            topRightCorner: { time: unixToUTC(p3t), price: p3p },
+            topLeftCorner: { time: unixToUTC(p4t), price: p4p },
           },
           bounds: { minTime: unixToUTC(bMinT), maxTime: unixToUTC(bMaxT), minPrice: bMinP, maxPrice: bMaxP },
         });
@@ -762,7 +762,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     chartRef.current = chart;
     
     // Create candlestick series
-    const candlestickSeries = chart.addCandlestickSeries({
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
       upColor: '#26a69a',
       downColor: '#ef5350',
       borderVisible: false,
@@ -773,7 +773,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     seriesRef.current = candlestickSeries;
     
     // Create invisible line series for time extension
-    const timeExtensionSeries = chart.addLineSeries({
+    const timeExtensionSeries = chart.addSeries(LineSeries, {
       color: 'transparent',
       lineWidth: 1,
       lineVisible: false,
