@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { TradingChart, TradingChartRef, ChartDataRange } from './TradingChart';
 import { Time } from 'lightweight-charts';
 import './App.css';
@@ -18,6 +18,20 @@ interface LabelData {
   time: Time;
   price: number;
   text: string;
+}
+
+interface RectangleData {
+  id: string;
+  points: {
+    p1: { time: Time; price: number };
+    p2: { time: Time; price: number };
+    p3: { time: Time; price: number };
+    p4: { time: Time; price: number };
+  };
+  fillColor: string;
+  fillOpacity: number;
+  borderColor?: string;
+  borderWidth?: number;
 }
 
 function App() {
@@ -41,6 +55,68 @@ function App() {
     (window as any).chart = chartRef.current;
     (window as any).dataRange = dataRange;
   }, [dataRange]);
+  
+  // Drawing list state for focus-on-drawing controls
+  const [drawings, setDrawings] = useState<
+    { id: string; type: 'trendline' | 'rectangle' | 'label'; isVisible: boolean }[]
+  >([]);
+  const [selectedDrawingId, setSelectedDrawingId] = useState<string>('');
+  
+  const refreshDrawings = useCallback(() => {
+    const vp = chartRef.current?.getViewport?.();
+    if (!vp) return;
+    const list = (vp.drawings || []).map((d: any) => ({
+      id: d.id as string,
+      type: d.type as 'trendline' | 'rectangle' | 'label',
+      isVisible: !!d.isVisible,
+    }));
+    setDrawings(list);
+    if (!selectedDrawingId && list.length) setSelectedDrawingId(list[0].id);
+  }, [selectedDrawingId]);
+  
+  // Initial refresh when data range becomes available
+  useEffect(() => {
+    refreshDrawings();
+  }, [dataRange, refreshDrawings]);
+
+  // Draw realistic rectangle around last 4 bars
+  const drawRealisticRectangle = () => {
+    if (!dataRange || !chartRef.current) return;
+    
+    const data = chartRef.current.getData?.() || [];
+    if (data.length < 4) return;
+    
+    // Get last 4 bars
+    const last4Bars = data.slice(-4);
+    const times = last4Bars.map((bar: any) => bar.time as number);
+    const prices = last4Bars.flatMap((bar: any) => [bar.open, bar.high, bar.low, bar.close]);
+    
+    const minTime = Math.min(...times);
+    const maxTime = Math.max(...times);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    
+    // Add some padding to make it look nicer
+    const timePadding = (maxTime - minTime) * 0.1;
+    const pricePadding = (maxPrice - minPrice) * 0.05;
+    
+    const rect: RectangleData = {
+      id: `realistic-rect-${Date.now()}`,
+      points: {
+        p1: { time: (minTime - timePadding) as Time, price: minPrice - pricePadding },
+        p2: { time: (maxTime + timePadding) as Time, price: minPrice - pricePadding },
+        p3: { time: (maxTime + timePadding) as Time, price: maxPrice + pricePadding },
+        p4: { time: (minTime - timePadding) as Time, price: maxPrice + pricePadding },
+      },
+      fillColor: '#3b82f6',
+      fillOpacity: 0.2,
+      borderColor: '#1d4ed8',
+      borderWidth: 2,
+    };
+    
+    chartRef.current.addRectangle(rect);
+    console.log('Added realistic rectangle around last 4 bars:', rect);
+  };
 
   // Test function: Draw beyond visible time range
   const testDrawPastVisibleTime = () => {
@@ -371,14 +447,14 @@ function App() {
               color: '#fff',
               border: 'none',
               borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
+              cursor: 'pointer',
               fontSize: '16px'
             }}
           >
-           log view port
+           🔍 Log Viewport
           </button>
           <button
-            onClick={testDrawWhileStreaming}
+            onClick={drawRealisticRectangle}
             disabled={!dataRange}
             style={{
               padding: '8px 16px',
@@ -390,7 +466,7 @@ function App() {
               fontSize: '14px'
             }}
           >
-            🧭 Log Viewport
+            draw realistic
           </button>
           <button
             onClick={() => {
@@ -481,6 +557,829 @@ function App() {
             ➡️ Right Edge<br/>
             {dataRange ? new Date((dataRange.minTime + (dataRange.maxTime - dataRange.minTime) * 0.75) * 1000).toISOString().slice(0, 16) + 'Z' : ''}
           </button>
+        </div>
+
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Test setViewport:
+          </div>
+          <button 
+            onClick={() => {
+              const result = chartRef.current?.setViewport(
+                dataRange?.minTime || 0,
+                dataRange?.maxTime || 0,
+                null,
+                null
+              );
+              console.log('setViewport (full time range, auto price):', result);
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📊 Full Time Range
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const midTime = (dataRange.minTime + dataRange.maxTime) / 2;
+                const quarterSpan = (dataRange.maxTime - dataRange.minTime) / 4;
+                const result = chartRef.current?.setViewport(
+                  midTime - quarterSpan,
+                  midTime + quarterSpan,
+                  null,
+                  null
+                );
+                console.log('setViewport (middle 50% of time):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ⏱️ Middle 50%
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport && dataRange) {
+                const result = chartRef.current?.setViewport(
+                  new Date(viewport.timeRange.minTime).getTime() / 1000,
+                  new Date(viewport.timeRange.maxTime).getTime() / 1000,
+                  dataRange.minPrice,
+                  dataRange.maxPrice
+                );
+                console.log('setViewport (current time, full price range):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📈 Full Price Range
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const priceSpan = viewport.priceRangeVisible.maxPrice - viewport.priceRangeVisible.minPrice;
+                const newMinPrice = viewport.priceRangeVisible.centerPrice - priceSpan * 0.25;
+                const newMaxPrice = viewport.priceRangeVisible.centerPrice + priceSpan * 0.25;
+                const result = chartRef.current?.setViewport(
+                  null,
+                  null,
+                  newMinPrice,
+                  newMaxPrice
+                );
+                console.log('setViewport (zoom in price 2x):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🔍 Zoom Price 2x
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              const result = chartRef.current?.setViewport(
+                viewport ? new Date(viewport.timeRange.minTime).getTime() / 1000 : undefined,
+                viewport ? new Date(viewport.timeRange.maxTime).getTime() / 1000 : undefined,
+                null,
+                null
+              );
+              console.log('setViewport (reset to auto-scale):', result);
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🔄 Auto-Scale
+          </button>
+        </div>
+
+        {/* Navigation Buttons */}
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Navigation:
+          </div>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 50;
+                const timeSpan = cadence * barsToShow;
+                const result = chartRef.current?.setViewport(
+                  dataRange.minTime,
+                  dataRange.minTime + timeSpan,
+                  null,
+                  null
+                );
+                console.log('Navigate to left edge (first 50 bars):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ⏮️ Left Edge
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 50;
+                const timeSpan = cadence * barsToShow;
+                const result = chartRef.current?.setViewport(
+                  dataRange.maxTime - timeSpan,
+                  dataRange.maxTime,
+                  null,
+                  null
+                );
+                console.log('Navigate to right edge (last 50 bars):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ⏭️ Right Edge
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const timeSpan = new Date(viewport.timeRange.maxTime).getTime() / 1000 - new Date(viewport.timeRange.minTime).getTime() / 1000;
+                const shift = timeSpan * 0.5;
+                const result = chartRef.current?.setViewport(
+                  new Date(viewport.timeRange.minTime).getTime() / 1000 - shift,
+                  new Date(viewport.timeRange.maxTime).getTime() / 1000 - shift,
+                  null,
+                  null
+                );
+                console.log('Pan left 50%:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ⬅️ Pan Left 50%
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const timeSpan = new Date(viewport.timeRange.maxTime).getTime() / 1000 - new Date(viewport.timeRange.minTime).getTime() / 1000;
+                const shift = timeSpan * 0.5;
+                const result = chartRef.current?.setViewport(
+                  new Date(viewport.timeRange.minTime).getTime() / 1000 + shift,
+                  new Date(viewport.timeRange.maxTime).getTime() / 1000 + shift,
+                  null,
+                  null
+                );
+                console.log('Pan right 50%:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            ➡️ Pan Right 50%
+          </button>
+        </div>
+
+        {/* Zoom Buttons (Combined Time + Price) */}
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Combined Zoom (Time + Price):
+          </div>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const timeMin = new Date(viewport.timeRange.minTime).getTime() / 1000;
+                const timeMax = new Date(viewport.timeRange.maxTime).getTime() / 1000;
+                const timeCenter = (timeMin + timeMax) / 2;
+                const timeSpan = (timeMax - timeMin) / 2; // Half the span
+                
+                const priceCenter = viewport.priceRangeVisible.centerPrice;
+                const priceSpan = (viewport.priceRangeVisible.maxPrice - viewport.priceRangeVisible.minPrice) / 2;
+                
+                const result = chartRef.current?.setViewport(
+                  timeCenter - timeSpan / 2,
+                  timeCenter + timeSpan / 2,
+                  priceCenter - priceSpan / 2,
+                  priceCenter + priceSpan / 2
+                );
+                console.log('Zoom in 2x (time + price):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🔍 Zoom In 2x
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const timeMin = new Date(viewport.timeRange.minTime).getTime() / 1000;
+                const timeMax = new Date(viewport.timeRange.maxTime).getTime() / 1000;
+                const timeCenter = (timeMin + timeMax) / 2;
+                const timeSpan = (timeMax - timeMin) / 4; // Quarter the span
+                
+                const priceCenter = viewport.priceRangeVisible.centerPrice;
+                const priceSpan = (viewport.priceRangeVisible.maxPrice - viewport.priceRangeVisible.minPrice) / 4;
+                
+                const result = chartRef.current?.setViewport(
+                  timeCenter - timeSpan / 2,
+                  timeCenter + timeSpan / 2,
+                  priceCenter - priceSpan / 2,
+                  priceCenter + priceSpan / 2
+                );
+                console.log('Zoom in 4x (time + price):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🔍 Zoom In 4x
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const timeMin = new Date(viewport.timeRange.minTime).getTime() / 1000;
+                const timeMax = new Date(viewport.timeRange.maxTime).getTime() / 1000;
+                const timeCenter = (timeMin + timeMax) / 2;
+                const timeSpan = (timeMax - timeMin) * 2; // Double the span
+                
+                const priceCenter = viewport.priceRangeVisible.centerPrice;
+                const priceSpan = (viewport.priceRangeVisible.maxPrice - viewport.priceRangeVisible.minPrice) * 2;
+                
+                const result = chartRef.current?.setViewport(
+                  timeCenter - timeSpan / 2,
+                  timeCenter + timeSpan / 2,
+                  priceCenter - priceSpan / 2,
+                  priceCenter + priceSpan / 2
+                );
+                console.log('Zoom out 2x (time + price):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🔎 Zoom Out 2x
+          </button>
+        </div>
+
+        {/* Specific Bar Counts */}
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Specific Bar Counts:
+          </div>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 20;
+                const timeSpan = cadence * barsToShow;
+                const result = chartRef.current?.setViewport(
+                  dataRange.maxTime - timeSpan,
+                  dataRange.maxTime,
+                  null,
+                  null
+                );
+                console.log('Show last 20 bars:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📊 Last 20 Bars
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 50;
+                const timeSpan = cadence * barsToShow;
+                const result = chartRef.current?.setViewport(
+                  dataRange.maxTime - timeSpan,
+                  dataRange.maxTime,
+                  null,
+                  null
+                );
+                console.log('Show last 50 bars:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📊 Last 50 Bars
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 100;
+                const timeSpan = cadence * barsToShow;
+                const result = chartRef.current?.setViewport(
+                  dataRange.maxTime - timeSpan,
+                  dataRange.maxTime,
+                  null,
+                  null
+                );
+                console.log('Show last 100 bars:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📊 Last 100 Bars
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 100;
+                const timeSpan = cadence * barsToShow;
+                const result = chartRef.current?.setViewport(
+                  dataRange.minTime,
+                  dataRange.minTime + timeSpan,
+                  null,
+                  null
+                );
+                console.log('Show first 100 bars:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📊 First 100 Bars
+          </button>
+        </div>
+
+        {/* Price-Specific Tests */}
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Price Ranges:
+          </div>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const priceCenter = viewport.priceRangeVisible.centerPrice;
+                const priceRange = priceCenter * 0.05; // ±5%
+                const result = chartRef.current?.setViewport(
+                  null,
+                  null,
+                  priceCenter - priceRange,
+                  priceCenter + priceRange
+                );
+                console.log('Price ±5%:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📈 Price ±5%
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const priceCenter = viewport.priceRangeVisible.centerPrice;
+                const priceRange = priceCenter * 0.10; // ±10%
+                const result = chartRef.current?.setViewport(
+                  null,
+                  null,
+                  priceCenter - priceRange,
+                  priceCenter + priceRange
+                );
+                console.log('Price ±10%:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📈 Price ±10%
+          </button>
+          <button 
+            onClick={() => {
+              const viewport = chartRef.current?.getViewport();
+              if (viewport) {
+                const priceCenter = viewport.priceRangeVisible.centerPrice;
+                const priceRange = priceCenter * 0.20; // ±20%
+                const result = chartRef.current?.setViewport(
+                  null,
+                  null,
+                  priceCenter - priceRange,
+                  priceCenter + priceRange
+                );
+                console.log('Price ±20%:', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            📈 Price ±20%
+          </button>
+        </div>
+
+        {/* Edge Cases & Stress Tests */}
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Edge Cases:
+          </div>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const cadence = 300; // 5 min bars
+                const barsToShow = 5;
+                const timeSpan = cadence * barsToShow;
+                const midTime = (dataRange.minTime + dataRange.maxTime) / 2;
+                const result = chartRef.current?.setViewport(
+                  midTime - timeSpan / 2,
+                  midTime + timeSpan / 2,
+                  null,
+                  null
+                );
+                console.log('Tiny range (5 bars):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🧪 Tiny Range
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                // Try to set range beyond data bounds
+                const result = chartRef.current?.setViewport(
+                  dataRange.minTime - 86400, // 1 day before
+                  dataRange.maxTime + 86400, // 1 day after
+                  dataRange.minPrice - 50,
+                  dataRange.maxPrice + 50
+                );
+                console.log('Huge range (beyond bounds):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🧪 Huge Range
+          </button>
+          <button 
+            onClick={() => {
+              if (dataRange) {
+                const midTime = (dataRange.minTime + dataRange.maxTime) / 2;
+                // Pass time2 < time1 to test auto-correction
+                const result = chartRef.current?.setViewport(
+                  midTime + 1000,
+                  midTime - 1000,
+                  150,
+                  140
+                );
+                console.log('Invalid range (time2 < time1, price2 < price1):', result);
+              }
+            }}
+            style={{ 
+              margin: '2px', 
+              padding: '4px 8px', 
+              backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '12px'
+            }}
+          >
+            🧪 Invalid Range
+          </button>
+        </div>
+        {/* Focus on Drawing(s) */}
+        <div style={{ 
+          marginTop: '20px', 
+          padding: '10px', 
+          backgroundColor: theme === 'dark' ? '#2a2a2a' : '#f0f0f0', 
+          borderRadius: '4px' 
+        }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: theme === 'dark' ? '#bbb' : '#333' }}>
+            Focus on Drawing(s):
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={refreshDrawings}
+              style={{ 
+                margin: '2px', 
+                padding: '4px 8px', 
+                backgroundColor: theme === 'dark' ? '#3a3a3a' : '#e0e0e0',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px'
+              }}
+            >
+              🔄 Refresh Drawings
+            </button>
+            <select
+              value={selectedDrawingId}
+              onChange={(e) => setSelectedDrawingId(e.target.value)}
+              style={{
+                padding: '6px 8px',
+                backgroundColor: theme === 'dark' ? '#1f2937' : '#fff',
+                color: theme === 'dark' ? '#fff' : '#000',
+                border: `1px solid ${theme === 'dark' ? '#374151' : '#ccc'}`,
+                borderRadius: '4px',
+                minWidth: '260px'
+              }}
+            >
+              {drawings.length === 0 && <option value="">No drawings found</option>}
+              {drawings.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.type} • {d.id} {d.isVisible ? '' : '(hidden)'}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => {
+                if (!selectedDrawingId) return;
+                const res = chartRef.current?.focusOnDrawing(selectedDrawingId);
+                console.log('focusOnDrawing(selected):', selectedDrawingId, res);
+              }}
+              disabled={!selectedDrawingId}
+              style={{ 
+                margin: '2px', 
+                padding: '4px 8px', 
+                backgroundColor: selectedDrawingId ? '#2563eb' : '#666',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: selectedDrawingId ? 'pointer' : 'not-allowed',
+                fontSize: '12px'
+              }}
+            >
+              🎯 Focus Selected
+            </button>
+            <button
+              onClick={() => {
+                if (drawings.length === 0) return;
+                const ids = drawings.map(d => d.id);
+                const res = chartRef.current?.focusOnDrawing(ids);
+                console.log('focusOnDrawing(all):', ids, res);
+              }}
+              disabled={drawings.length === 0}
+              style={{ 
+                margin: '2px', 
+                padding: '4px 8px', 
+                backgroundColor: drawings.length ? '#10b981' : '#666',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: drawings.length ? 'pointer' : 'not-allowed',
+                fontSize: '12px'
+              }}
+            >
+              🧿 Focus All
+            </button>
+            <button
+              onClick={() => {
+                const t = drawings.filter(d => d.type === 'trendline').at(-1);
+                if (!t) return;
+                const res = chartRef.current?.focusOnDrawing(t.id);
+                console.log('focusOnDrawing(last trendline):', t.id, res);
+              }}
+              disabled={!drawings.some(d => d.type === 'trendline')}
+              style={{ 
+                margin: '2px', 
+                padding: '4px 8px', 
+                backgroundColor: drawings.some(d => d.type === 'trendline') ? '#9333ea' : '#666',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: drawings.some(d => d.type === 'trendline') ? 'pointer' : 'not-allowed',
+                fontSize: '12px'
+              }}
+            >
+              📐 Last Trendline
+            </button>
+            <button
+              onClick={() => {
+                const r = drawings.filter(d => d.type === 'rectangle').at(-1);
+                if (!r) return;
+                const res = chartRef.current?.focusOnDrawing(r.id);
+                console.log('focusOnDrawing(last rectangle):', r.id, res);
+              }}
+              disabled={!drawings.some(d => d.type === 'rectangle')}
+              style={{ 
+                margin: '2px', 
+                padding: '4px 8px', 
+                backgroundColor: drawings.some(d => d.type === 'rectangle') ? '#f59e0b' : '#666',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: drawings.some(d => d.type === 'rectangle') ? 'pointer' : 'not-allowed',
+                fontSize: '12px'
+              }}
+            >
+              ▭ Last Rectangle
+            </button>
+            <button
+              onClick={() => {
+                const l = drawings.filter(d => d.type === 'label').at(-1);
+                if (!l) return;
+                const res = chartRef.current?.focusOnDrawing(l.id);
+                console.log('focusOnDrawing(last label):', l.id, res);
+              }}
+              disabled={!drawings.some(d => d.type === 'label')}
+              style={{ 
+                margin: '2px', 
+                padding: '4px 8px', 
+                backgroundColor: drawings.some(d => d.type === 'label') ? '#ef4444' : '#666',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: drawings.some(d => d.type === 'label') ? 'pointer' : 'not-allowed',
+                fontSize: '12px'
+              }}
+            >
+              🏷️ Last Label
+            </button>
+          </div>
+          <div style={{ marginTop: '6px', fontSize: '12px', color: theme === 'dark' ? '#aaa' : '#555' }}>
+            {drawings.length} drawing(s) detected
+          </div>
         </div>
         
         <div style={{ 
