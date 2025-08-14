@@ -118,81 +118,36 @@ function App() {
     console.log('Added realistic rectangle around last 4 bars:', rect);
   };
 
-  // Test function: Draw beyond visible time range
-  const testDrawPastVisibleTime = () => {
-    if (!dataRange || !chartRef.current) return;
-    
-    // Create timestamps for Aug 4 and Aug 20, 2025
-    const aug4 = Math.floor(Date.UTC(2025, 7, 6, 0, 0, 0) / 1000); // Aug 4, 2025 00:00 UTC
-    const aug20 = Math.floor(Date.UTC(2025, 7, 12, 23, 59, 59) / 1000); // Aug 20, 2025 23:59:59 UTC
-    
-    // Green trend line - upward sloping
-    const greenLine: TrendLineData = {
-      id: `green-trend-${Date.now()}`,
-      point1: { time: aug4 as Time, price: 145 },
-      point2: { time: aug20 as Time, price: 142 },
-      color: '#00ff00',
-      lineWidth: 3,
-      lineStyle: 0
-    };
-    
-    // Blue trend line - downward sloping
-    const blueLine: TrendLineData = {
-      id: `blue-trend-${Date.now() + 1}`,
-      point1: { time: aug4 as Time, price: 138 },
-      point2: { time: aug20 as Time, price: 138 },
-      color: '#0000ff',
-      lineWidth: 3,
-      lineStyle: 0
-    };
-    
-    chartRef.current.addTrendLine(greenLine);
-    chartRef.current.addTrendLine(blueLine);
-  };
 
-  // Test function: Draw while data is streaming
-  const testDrawWhileStreaming = () => {
-    if (!dataRange || !chartRef.current) return;
-    
-    const rectangle = {
-      id: `streaming-rect-${Date.now()}`,
-      points: {
-        p1: { time: dataRange.minTime as Time, price: dataRange.minPrice },
-        p2: { time: (dataRange.minTime + 3600) as Time, price: dataRange.minPrice },
-        p3: { time: (dataRange.minTime + 3600) as Time, price: dataRange.minPrice + 2 },
-        p4: { time: dataRange.minTime as Time, price: dataRange.minPrice + 2 }
-      },
-      fillColor: '#00ff00',
-      fillOpacity: 0.3,
-      borderColor: '#008800',
-      borderWidth: 2
-    };
-    
-    chartRef.current.addRectangle(rectangle);
-    
-    // Also add a label at current time
-    const label: LabelData = {
-      id: `streaming-label-${Date.now()}`,
-      time: dataRange.maxTime as Time,
-      price: dataRange.maxPrice,
-      text: 'LIVE'
-    };
-    
-    chartRef.current.addLabel(label);
-  };
 
-  // Test function: Rectangles outside data range with off-cadence times
+  // Test fu  // Test function: Rectangles outside data range with off-cadence times (DYNAMIC)
   const testRectanglesOutsideRange = () => {
     if (!dataRange || !chartRef.current) return;
     
-    // Rectangle LEFT of data - Aug 4 10:03 to Aug 8 14:27
+    // Get current viewport to determine cadence and reasonable sizing
+    const viewport = chartRef.current.getViewport?.();
+    if (!viewport) return;
+    
+    const cadenceSec = viewport.cadenceSec || 1; // fallback to 5min
+    const barsForRect = 20; // Rectangle spans ~20 bars
+    const rectTimeSpan = cadenceSec * barsForRect;
+    
+    // Calculate positions relative to data range
+    const dataSpan = dataRange.maxTime - dataRange.minTime;
+    const priceSpan = dataRange.maxPrice - dataRange.minPrice;
+    const priceCenter = (dataRange.minPrice + dataRange.maxPrice) / 2;
+    
+    // Rectangle LEFT of data - starts 10% before data, spans 20 bars
+    const leftStartTime = dataRange.minTime - (dataSpan * 0.1);
+    const leftEndTime = leftStartTime + rectTimeSpan;
+    // Add off-cadence offset (3 seconds and 17 seconds)
     const leftRect = {
       id: `left-rect-${Date.now()}`,
       points: {
-        p1: { time: Math.floor(Date.UTC(2025, 7, 4, 10, 3, 0) / 1000) as Time, price: 148 },
-        p2: { time: Math.floor(Date.UTC(2025, 7, 8, 14, 27, 0) / 1000) as Time, price: 148 },
-        p3: { time: Math.floor(Date.UTC(2025, 7, 8, 14, 27, 0) / 1000) as Time, price: 152 },
-        p4: { time: Math.floor(Date.UTC(2025, 7, 4, 10, 3, 0) / 1000) as Time, price: 152 }
+        p1: { time: (leftStartTime + 3) as Time, price: priceCenter - priceSpan * 0.1 },
+        p2: { time: (leftEndTime + 17) as Time, price: priceCenter - priceSpan * 0.1 },
+        p3: { time: (leftEndTime + 17) as Time, price: priceCenter + priceSpan * 0.1 },
+        p4: { time: (leftStartTime + 3) as Time, price: priceCenter + priceSpan * 0.1 }
       },
       fillColor: '#ff0000',
       fillOpacity: 0.2,
@@ -200,14 +155,17 @@ function App() {
       borderWidth: 2
     };
     
-    // Rectangle RIGHT of data - Aug 11 16:33 to Aug 15 23:47
+    // Rectangle RIGHT of data - starts 10% after data, spans 20 bars  
+    const rightStartTime = dataRange.maxTime + (dataSpan * 0.1);
+    const rightEndTime = rightStartTime + rectTimeSpan;
+    // Add different off-cadence offsets (33 seconds and 47 seconds)
     const rightRect = {
       id: `right-rect-${Date.now() + 1}`,
       points: {
-        p1: { time: Math.floor(Date.UTC(2025, 7, 11, 16, 33, 0) / 1000) as Time, price: 143 },
-        p2: { time: Math.floor(Date.UTC(2025, 7, 15, 23, 47, 0) / 1000) as Time, price: 143 },
-        p3: { time: Math.floor(Date.UTC(2025, 7, 15, 23, 47, 0) / 1000) as Time, price: 147 },
-        p4: { time: Math.floor(Date.UTC(2025, 7, 11, 16, 33, 0) / 1000) as Time, price: 147 }
+        p1: { time: (rightStartTime + 33) as Time, price: priceCenter - priceSpan * 0.15 },
+        p2: { time: (rightEndTime + 47) as Time, price: priceCenter - priceSpan * 0.15 },
+        p3: { time: (rightEndTime + 47) as Time, price: priceCenter + priceSpan * 0.15 },
+        p4: { time: (rightStartTime + 33) as Time, price: priceCenter + priceSpan * 0.15 }
       },
       fillColor: '#0000ff',
       fillOpacity: 0.2,
@@ -215,56 +173,96 @@ function App() {
       borderWidth: 2
     };
     
+    console.log(`Creating dynamic rectangles outside range:
+      - Cadence: ${cadenceSec}s, Rectangle span: ${barsForRect} bars (${rectTimeSpan}s)
+      - Left rect: ${new Date(leftStartTime * 1000).toISOString()} to ${new Date(leftEndTime * 1000).toISOString()}
+      - Right rect: ${new Date(rightStartTime * 1000).toISOString()} to ${new Date(rightEndTime * 1000).toISOString()}`);
+    
     chartRef.current.addRectangle(leftRect);
     chartRef.current.addRectangle(rightRect);
   };
 
-  // Test function: Labels outside data range with off-cadence times
+
+  // Test function: Labels outside data range with off-cadence times (DYNAMIC)
   const testLabelsOutsideRange = () => {
     if (!dataRange || !chartRef.current) return;
     
-    // Label LEFT of data - Aug 3 09:17
+    // Get current viewport to determine cadence and reasonable sizing
+    const viewport = chartRef.current.getViewport?.();
+    if (!viewport) return;
+    
+    const cadenceSec = viewport.cadenceSec || 1; // fallback to 5min
+    const dataSpan = dataRange.maxTime - dataRange.minTime;
+    const priceSpan = dataRange.maxPrice - dataRange.minPrice;
+    const priceCenter = (dataRange.minPrice + dataRange.maxPrice) / 2;
+    
+    // Label LEFT of data - positioned just a few bars before data starts
+    const leftLabelTime = dataRange.minTime - (cadenceSec * 3); // 3 bars before data
     const leftLabel: LabelData = {
       id: `left-label-${Date.now()}`,
-      time: Math.floor(Date.UTC(2025, 7, 3, 9, 17, 0) / 1000) as Time,
-      price: 149,
-      text: 'LEFT 09:17'
+      time: (leftLabelTime + 17) as Time, // +17 sec off-cadence
+      price: priceCenter + priceSpan * 0.1,
+      text: 'LEFT +17s'
     };
     
-    // Label RIGHT of data - Aug 16 21:43
+    // Label RIGHT of data - positioned just a few bars after data ends
+    const rightLabelTime = dataRange.maxTime + (cadenceSec * 3); // 3 bars after data
     const rightLabel: LabelData = {
       id: `right-label-${Date.now() + 1}`,
-      time: Math.floor(Date.UTC(2025, 7, 16, 21, 43, 0) / 1000) as Time,
-      price: 145,
-      text: 'RIGHT 21:43'
+      time: (rightLabelTime + 43) as Time, // +43 sec off-cadence
+      price: priceCenter - priceSpan * 0.1,
+      text: 'RIGHT +43s'
     };
+    
+    console.log(`Creating dynamic labels outside range:
+      - Cadence: ${cadenceSec}s
+      - Left label: ${new Date(leftLabelTime * 1000).toISOString()} (${cadenceSec * 3}s before data)
+      - Right label: ${new Date(rightLabelTime * 1000).toISOString()} (${cadenceSec * 3}s after data)`);
     
     chartRef.current.addLabel(leftLabel);
     chartRef.current.addLabel(rightLabel);
   };
 
-  // Test function: Within range but off-cadence times
+  // Test function: Within range but off-cadence times (DYNAMIC)
   const testWithinRangeOffCadence = () => {
     if (!dataRange || !chartRef.current) return;
     
-    // Trend line inside data but off 5-min grid - Aug 9 10:03 to Aug 9 16:27
+    // Get current viewport to determine cadence and reasonable sizing
+    const viewport = chartRef.current.getViewport?.();
+    if (!viewport) return;
+    
+    const cadenceSec = viewport.cadenceSec || 1; // fallback to 5min
+    const dataSpan = dataRange.maxTime - dataRange.minTime;
+    const priceSpan = dataRange.maxPrice - dataRange.minPrice;
+    const priceCenter = (dataRange.minPrice + dataRange.maxPrice) / 2;
+    
+    // Trend line inside data but off-cadence - spans ~30 bars in middle of data
+    const midTime = (dataRange.minTime + dataRange.maxTime) / 2;
+    const trendSpan = cadenceSec * 30; // 30 bars worth
+    const trendStart = midTime - trendSpan / 2;
+    const trendEnd = midTime + trendSpan / 2;
+    
     const offCadenceLine: TrendLineData = {
       id: `off-cadence-line-${Date.now()}`,
-      point1: { time: Math.floor(Date.UTC(2025, 7, 9, 10, 3, 0) / 1000) as Time, price: 149 },
-      point2: { time: Math.floor(Date.UTC(2025, 7, 9, 16, 27, 0) / 1000) as Time, price: 151 },
+      point1: { time: (trendStart + 3) as Time, price: priceCenter - priceSpan * 0.1 }, // +3 sec off-cadence
+      point2: { time: (trendEnd + 27) as Time, price: priceCenter + priceSpan * 0.1 }, // +27 sec off-cadence
       color: '#ff00ff',
       lineWidth: 3,
       lineStyle: 0
     };
     
-    // Rectangle inside data with off-cadence corners - Aug 9 11:17 to Aug 9 13:42
+    // Rectangle inside data with off-cadence corners - spans ~15 bars
+    const rectSpan = cadenceSec * 15; // 15 bars worth
+    const rectStart = midTime - rectSpan / 2;
+    const rectEnd = midTime + rectSpan / 2;
+    
     const offCadenceRect = {
       id: `off-cadence-rect-${Date.now()}`,
       points: {
-        p1: { time: Math.floor(Date.UTC(2025, 7, 9, 11, 17, 0) / 1000) as Time, price: 148.5 },
-        p2: { time: Math.floor(Date.UTC(2025, 7, 9, 13, 42, 0) / 1000) as Time, price: 148.5 },
-        p3: { time: Math.floor(Date.UTC(2025, 7, 9, 13, 42, 0) / 1000) as Time, price: 150.5 },
-        p4: { time: Math.floor(Date.UTC(2025, 7, 9, 11, 17, 0) / 1000) as Time, price: 150.5 }
+        p1: { time: (rectStart + 17) as Time, price: priceCenter - priceSpan * 0.05 }, // +17 sec off-cadence
+        p2: { time: (rectEnd + 42) as Time, price: priceCenter - priceSpan * 0.05 }, // +42 sec off-cadence
+        p3: { time: (rectEnd + 42) as Time, price: priceCenter + priceSpan * 0.05 },
+        p4: { time: (rectStart + 17) as Time, price: priceCenter + priceSpan * 0.05 }
       },
       fillColor: '#00ff00',
       fillOpacity: 0.2,
@@ -272,48 +270,26 @@ function App() {
       borderWidth: 2
     };
     
-    // Label inside data at off-cadence time - Aug 9 14:52
+    // Label inside data at off-cadence time
     const offCadenceLabel: LabelData = {
       id: `off-cadence-label-${Date.now()}`,
-      time: Math.floor(Date.UTC(2025, 7, 9, 14, 52, 0) / 1000) as Time,
-      price: 150,
-      text: 'OFF 14:52'
+      time: (midTime + 52) as Time, // +52 sec off-cadence
+      price: priceCenter,
+      text: 'OFF +52s'
     };
+    
+    console.log(`Creating dynamic off-cadence drawings:
+      - Cadence: ${cadenceSec}s
+      - Trend line: ${new Date(trendStart * 1000).toISOString()} to ${new Date(trendEnd * 1000).toISOString()}
+      - Rectangle: ${new Date(rectStart * 1000).toISOString()} to ${new Date(rectEnd * 1000).toISOString()}
+      - Label: ${new Date((midTime + 52) * 1000).toISOString()}`);
     
     chartRef.current.addTrendLine(offCadenceLine);
     chartRef.current.addRectangle(offCadenceRect);
     chartRef.current.addLabel(offCadenceLabel);
   };
 
-  // Test function: Multiple overlapping drawings
-  const testMultipleDrawings = () => {
-    if (!dataRange || !chartRef.current) return;
-    
-    // Add multiple trend lines
-    for (let i = 0; i < 3; i++) {
-      const trendLine: TrendLineData = {
-        id: `multi-trend-${Date.now()}-${i}`,
-        point1: { time: (dataRange.minTime + i * 1800) as Time, price: dataRange.minPrice + i },
-        point2: { time: (dataRange.maxTime - i * 1800) as Time, price: dataRange.maxPrice - i },
-        color: ['#ff0000', '#00ff00', '#0000ff'][i],
-        lineWidth: 2,
-        lineStyle: 0
-      };
-      chartRef.current.addTrendLine(trendLine);
-    }
-    
-    // Add overlapping labels
-    for (let i = 0; i < 3; i++) {
-      const label: LabelData = {
-        id: `multi-label-${Date.now()}-${i}`,
-        time: (dataRange.minTime + (dataRange.maxTime - dataRange.minTime) / 2) as Time,
-        price: dataRange.minPrice + ((dataRange.maxPrice - dataRange.minPrice) / 2) + i * 0.5,
-        text: `L${i + 1}`
-      };
-      chartRef.current.addLabel(label);
-    }
-    
-  };
+
 
   // Test function: Log current viewport
   const testLogViewport = () => {
@@ -349,51 +325,7 @@ function App() {
           >
             {theme === 'dark' ? '☀️ Light' : '🌙 Dark'}
           </button>
-          <button
-            onClick={testDrawPastVisibleTime}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#ff4444' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '16px'
-            }}
-          >
-            🚀 Test: Draw Past Time
-          </button>
-          <button
-            onClick={testDrawWhileStreaming}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#00aa00' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '14px'
-            }}
-          >
-            📊 Test: Draw While Streaming
-          </button>
-          <button
-            onClick={testMultipleDrawings}
-            disabled={!dataRange}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: dataRange ? '#9333ea' : '#666',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: dataRange ? 'pointer' : 'not-allowed',
-              fontSize: '14px'
-            }}
-          >
-            🎯 Test: Multiple Overlaps
-          </button>
+
           <button
             onClick={testRectanglesOutsideRange}
             disabled={!dataRange}
@@ -707,7 +639,8 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 50;
                 const timeSpan = cadence * barsToShow;
                 const result = chartRef.current?.setViewport(
@@ -734,7 +667,8 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 50;
                 const timeSpan = cadence * barsToShow;
                 const result = chartRef.current?.setViewport(
@@ -938,16 +872,17 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 20;
                 const timeSpan = cadence * barsToShow;
                 const result = chartRef.current?.setViewport(
-                  dataRange.maxTime - timeSpan,
-                  dataRange.maxTime,
+                  dataRange.minTime,
+                  dataRange.minTime + timeSpan,
                   null,
                   null
                 );
-                console.log('Show last 20 bars:', result);
+                console.log('Show first 20 bars:', result);
               }
             }}
             style={{ 
@@ -965,7 +900,8 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 50;
                 const timeSpan = cadence * barsToShow;
                 const result = chartRef.current?.setViewport(
@@ -992,7 +928,8 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 100;
                 const timeSpan = cadence * barsToShow;
                 const result = chartRef.current?.setViewport(
@@ -1019,7 +956,8 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 100;
                 const timeSpan = cadence * barsToShow;
                 const result = chartRef.current?.setViewport(
@@ -1151,7 +1089,8 @@ function App() {
           <button 
             onClick={() => {
               if (dataRange) {
-                const cadence = 300; // 5 min bars
+                const viewport = chartRef.current?.getViewport?.();
+                const cadence = viewport?.cadenceSec || 1; // dynamic cadence
                 const barsToShow = 5;
                 const timeSpan = cadence * barsToShow;
                 const midTime = (dataRange.minTime + dataRange.maxTime) / 2;
@@ -1403,7 +1342,7 @@ function App() {
       <main className="App-main">
         <TradingChart 
           ref={chartRef}
-          symbol="AAPL" 
+          symbol="SPY" 
           initialPrice={150.00}
           backgroundColor={themes[theme].backgroundColor}
           textColor={themes[theme].textColor}

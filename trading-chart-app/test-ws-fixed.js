@@ -6,7 +6,7 @@ const ws = new WebSocket('ws://localhost:8090/ws');
 ws.on('open', () => {
   console.log('[TEST] ✅ WebSocket connected successfully!');
   console.log('[TEST] Sending ticker subscription...');
-  ws.send(JSON.stringify({ ticker: 'AAPL' }));
+  ws.send(JSON.stringify({ ticker: 'SPY' }));
 });
 
 ws.on('message', (data) => {
@@ -33,4 +33,4 @@ setTimeout(() => {
   console.log('[TEST] 🕐 Test timeout, closing connection...');
   ws.close();
   process.exit(0);
-}, 20000);
+}, 50000);

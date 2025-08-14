@@ -34,11 +34,23 @@ export const updateTimeExtensionSeries = (
   isUpdatingExtensionRef: React.MutableRefObject<boolean>
 ) => {
   if (!timeExtensionSeriesRef.current) return;
+  
+  // Prevent recursive calls
+  if (isUpdatingExtensionRef.current) {
+    console.warn('updateTimeExtensionSeries: Already updating, skipping to prevent recursion');
+    return;
+  }
+
+  // Set flag early to prevent recursion
+  isUpdatingExtensionRef.current = true;
 
   // Collect all points from all drawings
   const allPoints: LineData[] = [];
   
-  timeExtensionPointsRef.current.forEach((points) => {
+  console.log(`updateTimeExtensionSeries: Processing ${timeExtensionPointsRef.current.size} drawings`);
+  
+  timeExtensionPointsRef.current.forEach((points, drawingId) => {
+    console.log(`  Drawing ${drawingId}: ${points.length} points`);
     allPoints.push(...points);
   });
 
@@ -49,11 +61,11 @@ export const updateTimeExtensionSeries = (
       index === 0 || (point.time as number) !== (array[index - 1].time as number)
     );
 
-  // Set flag to indicate we're updating extensions
-  isUpdatingExtensionRef.current = true;
+  console.log(`updateTimeExtensionSeries: Total ${allPoints.length} points, ${uniquePoints.length} unique points`);
   
   // Update the time extension series
   timeExtensionSeriesRef.current.setData(uniquePoints);
+  
   // Reset update flag
   isUpdatingExtensionRef.current = false;
 };
@@ -570,7 +582,9 @@ export const focusOnDrawing = (
     const opt = (lp as any).options as any;
     if (!ids.includes(opt.id)) return;
     found = true;
-    const t = opt.time as number; const p = opt.price as number;
+    // Convert ISO string time to Unix timestamp in seconds
+    const t = typeof opt.time === 'string' ? new Date(opt.time).getTime() / 1000 : opt.time as number;
+    const p = opt.price as number;
     bMinT = Math.min(bMinT, t);
     bMaxT = Math.max(bMaxT, t);
     bMinP = Math.min(bMinP, p);
@@ -589,8 +603,11 @@ export const focusOnDrawing = (
   const fallbackTimeSpan = (cadence > 0 ? cadence : (barIntervalSecRef.current || 900)) * minBars;
 
   const currVisPriceSpan = Math.max(0, (before.priceRangeVisible.maxPrice - before.priceRangeVisible.minPrice));
-  const minPriceAbs = opts?.minPriceSpanAbs ?? 0.1;
-  const minPriceFracVis = opts?.minPriceSpanFracOfVisible ?? 0.05; // 5% of current visible as floor
+  // Dynamic minimum based on current price level - use 1% of center price as reasonable minimum
+  const currentPriceCenter = (before.priceRangeVisible.minPrice + before.priceRangeVisible.maxPrice) / 2;
+  const dynamicMinPriceAbs = Math.max(0.01, currentPriceCenter * 0.01); // 1% of current price level
+  const minPriceAbs = opts?.minPriceSpanAbs ?? dynamicMinPriceAbs;
+  const minPriceFracVis = opts?.minPriceSpanFracOfVisible ?? 0.2; // 20% of current visible
   const fallbackPriceSpan = Math.max(minPriceAbs, currVisPriceSpan * minPriceFracVis);
 
   const shapeTimeSpan = Math.max(0, bMaxT - bMinT);
