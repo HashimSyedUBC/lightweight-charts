@@ -121,6 +121,12 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
   const lastBarTimeSecRef = useRef<number | null>(null);
   const backfillCompleteRef = useRef(false);
   const lastBackfillTimestampRef = useRef<number>(0);
+  const isBackfillingRef = useRef(false);
+  
+  // Pagination refs
+  const isPaginatingRef = useRef(false);
+  const oldestTimestampRef = useRef<number>(0);
+  const noMoreDataRef = useRef(false);
 
 
 
@@ -319,9 +325,38 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       }
     };
     window.addEventListener('resize', handleResize);
-    // Listen for visible range changes to update data range
+    // Listen for visible range changes to update data range and trigger pagination
+    let scrollDebounceTimer: NodeJS.Timeout | null = null;
     chart.timeScale().subscribeVisibleTimeRangeChange(() => {
       notifyDataRangeChangeCallback();
+      
+      // Check if we should paginate (debounced)
+      if (scrollDebounceTimer) clearTimeout(scrollDebounceTimer);
+      
+      // Check immediately if we should skip
+      const visibleRange = chart.timeScale().getVisibleRange();
+      if (!visibleRange || !chartDataRef.current.length || isPaginatingRef.current || noMoreDataRef.current) return;
+      
+      scrollDebounceTimer = setTimeout(() => {
+        // Double-check after debounce
+        if (isPaginatingRef.current || noMoreDataRef.current) return;
+        
+        const currentRange = chart.timeScale().getVisibleRange();
+        if (!currentRange) return;
+        
+        const visibleFrom = currentRange.from as number;
+        const oldestTime = oldestTimestampRef.current;
+        
+        if (!oldestTime) return;
+        
+        // Calculate how many bars from the left edge
+        const barsFromLeft = Math.floor((visibleFrom - oldestTime) / barIntervalSecRef.current);
+        
+        // Trigger when within 150 bars of the left edge
+        if (barsFromLeft < 150 && !isPaginatingRef.current && !noMoreDataRef.current) {
+          loadMoreHistory();
+        }
+      }, 50); // 50ms debounce
     });
 
     // Helper: fetch backfill (prefer 1-second, fallback to minute)
@@ -360,6 +395,15 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
 
     // Optimized backfill to get maximum 1300 bars with fewer API calls
     const loadBackfill = async () => {
+      console.log('🚀 BACKFILL TRIGGERED - completed:', backfillCompleteRef.current, 'hasData:', chartDataRef.current.length > 0);
+      
+      // Guard against duplicate backfill calls
+      if (backfillCompleteRef.current || chartDataRef.current.length > 0 || isBackfillingRef.current) {
+        console.log('⏭️ Backfill skipped - already completed or in progress');
+        return;
+      }
+      
+      isBackfillingRef.current = true;
       const nowSec = Math.floor(Date.now() / 1000);
       const TARGET_BARS = 1300;
       const CHUNK_HOURS = 6; // Fetch 6-hour chunks to reduce API calls
@@ -409,14 +453,96 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       
       // Track last backfill timestamp
       lastBackfillTimestampRef.current = (uniqueBars[uniqueBars.length - 1].time as number) || 0;
+      oldestTimestampRef.current = (uniqueBars[0].time as number) || 0;
       
       // Fit chart
       chart.timeScale().fitContent();
       
       firstDataArrivedRef.current = true;
       backfillCompleteRef.current = true;
+      isBackfillingRef.current = false;
       notifyDataRangeChangeCallback();
       console.log(`✅ Backfill complete: ${uniqueBars.length} bars loaded`);
+    };
+
+    // Load more history when scrolling left
+    const loadMoreHistory = async () => {
+      console.log('🔄 Pagination check - isPaginating:', isPaginatingRef.current, 'noMoreData:', noMoreDataRef.current);
+      if (isPaginatingRef.current || noMoreDataRef.current || !oldestTimestampRef.current) return;
+      isPaginatingRef.current = true;
+      console.log('⏳ Loading more history...');
+      
+      const PAGINATION_BARS = 500; // Smaller chunks for pagination
+      const CHUNK_HOURS = 6;
+      
+      // Save current viewport before loading
+      const visibleRange = chart.timeScale().getVisibleRange();
+      
+      let newBars: CandlestickData[] = [];
+      let attempts = 0;
+      const MAX_ATTEMPTS = 3;
+      
+      let currentOldest = oldestTimestampRef.current;
+      
+      while (newBars.length < PAGINATION_BARS && attempts < MAX_ATTEMPTS) {
+        const toSec = currentOldest - 1; // Start just before oldest
+        const fromSec = toSec - (CHUNK_HOURS * 3600);
+        
+        const fetchedBars = await fetchTimeRange(fromSec, toSec);
+        if (fetchedBars.length > 0) {
+          newBars = [...newBars, ...fetchedBars];
+          // Update currentOldest for next iteration
+          const fetchedOldest = (fetchedBars[0].time as number);
+          if (fetchedOldest < currentOldest) {
+            currentOldest = fetchedOldest;
+          }
+        } else {
+          // No data in this chunk (market gap/weekend). Step back and continue.
+          currentOldest = fromSec;
+        }
+        attempts++;
+      }
+      
+      if (newBars.length > 0) {
+        // Trim to pagination limit
+        if (newBars.length > PAGINATION_BARS) {
+          newBars = newBars.slice(-PAGINATION_BARS);
+        }
+        
+        // Merge with existing data
+        const mergedData = [...newBars, ...chartDataRef.current];
+        
+        // Deduplicate
+        const uniqueData = mergedData.filter((bar, index, arr) => 
+          index === 0 || (bar.time as number) !== (arr[index - 1].time as number)
+        );
+        
+        // Update data
+        chartDataRef.current = uniqueData;
+        seriesRef.current?.setData(uniqueData);
+        
+        // Update oldest timestamp only if we have older data
+        const newOldest = (uniqueData[0].time as number);
+        if (newOldest < oldestTimestampRef.current) {
+          oldestTimestampRef.current = newOldest;
+        }
+        
+        // Restore viewport to prevent jumping
+        if (visibleRange) {
+          chart.timeScale().setVisibleRange(visibleRange);
+        }
+        
+        notifyDataRangeChangeCallback();
+        console.log(`✅ Loaded ${newBars.length} more historical bars`);
+      } else {
+        // No bars found across scanned window; move pointer back to skip gap
+        if (currentOldest < oldestTimestampRef.current) {
+          oldestTimestampRef.current = currentOldest;
+        }
+        console.log(`⛳ No historical bars found across ${attempts} chunks; advanced oldest pointer to ${currentOldest}`);
+      }
+      
+      isPaginatingRef.current = false;
     };
 
     // Use global WebSocket connection manager to prevent duplicates
@@ -494,7 +620,7 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
     };
 
     // Kick off backfill first, then attach WS and subscribe
-
+    console.log('📋 useEffect RUNNING - deps changed, calling loadBackfill');
     loadBackfill().finally(() => {
 
       // Subscribe to global WebSocket
