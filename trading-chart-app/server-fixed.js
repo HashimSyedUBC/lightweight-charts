@@ -12,26 +12,69 @@ app.use(cors());
 app.use(express.json());
 
 // REST proxy for aggregates
-app.get('/api/aggregates/:ticker/:from/:to', (req, res) => {
-  const { ticker, from, to } = req.params;
-  const url = `https://api.polygon.io/v2/aggs/ticker/${ticker}/range/1/minute/${from}/${to}?apiKey=${POLYGON_API_KEY}&sort=asc&limit=50000`;
-  https.get(url, (polygonRes) => {
-    let data = '';
-    polygonRes.on('data', (chunk) => (data += chunk));
-    polygonRes.on('end', () => {
-      try {
-        const json = JSON.parse(data);
-        res.status(polygonRes.statusCode || 200).json(json);
-      } catch (err) {
-        console.error('[REST] JSON parse error:', err);
-        res.status(500).json({ error: 'JSON parse error' });
-      }
-    });
-  }).on('error', (err) => {
-    console.error('[REST] HTTPS error:', err);
-    res.status(500).json({ error: 'Network error' });
+// Helper to perform HTTPS GET returning parsed JSON
+function httpsGetJson(url) {
+  return new Promise((resolve, reject) => {
+    https
+      .get(url, (r) => {
+        let data = '';
+        r.on('data', (chunk) => (data += chunk));
+        r.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            resolve({ statusCode: r.statusCode || 200, json });
+          } catch (e) {
+            reject(e);
+          }
+        });
+      })
+      .on('error', (e) => reject(e));
   });
-});
+}
+
+// REST proxy for aggregates (dynamic interval via timespan/multiplier)
+// Handler function for aggregates endpoint
+const handleAggregates = async (req, res) => {
+  const { ticker, from, to } = req.params;
+  const { timespan, multiplier } = req.query;
+
+  // Validate inputs
+  const fromSec = parseInt(from, 10);
+  const toSec = parseInt(to, 10);
+  if (!ticker || !Number.isFinite(fromSec) || !Number.isFinite(toSec) || toSec <= fromSec) {
+    return res.status(400).json({ error: 'Invalid params' });
+  }
+
+  try {
+    const m = Math.max(1, parseInt(String(multiplier || '1'), 10));
+    const span = String(timespan || 'minute').toLowerCase();
+    const valid = new Set(['second', 'minute', 'hour', 'day', 'week', 'month', 'quarter', 'year']);
+    const spanFinal = valid.has(span) ? span : 'minute';
+    const fromMs = fromSec * 1000;
+    const toMs = toSec * 1000;
+    
+    console.log(`[REST] Fetching ${ticker} data: ${spanFinal} bars from ${new Date(fromMs).toISOString()} to ${new Date(toMs).toISOString()}`);
+    
+    const url = `https://api.polygon.io/v2/aggs/ticker/${encodeURIComponent(
+      ticker
+    )}/range/${m}/${spanFinal}/${fromMs}/${toMs}?apiKey=${POLYGON_API_KEY}&sort=asc&limit=50000`;
+    const { statusCode, json } = await httpsGetJson(url);
+    
+    const resultCount = json?.results?.length || 0;
+    console.log(`[REST] Returning ${resultCount} data points for ${ticker} (${spanFinal} bars)`);
+    
+    return res.status(statusCode).json(json);
+  } catch (err) {
+    console.error('[REST] Aggregates error:', err.message || err);
+    return res.status(502).json({ error: 'Upstream error', detail: String(err.message || err) });
+  }
+};
+
+// Route with /api prefix (for direct calls)
+app.get('/api/aggregates/:ticker/:from/:to', handleAggregates);
+
+// Route without /api prefix (for proxied calls from React dev server)
+app.get('/aggregates/:ticker/:from/:to', handleAggregates);
 
 const server = app.listen(PORT, () => {
   console.log(`[REST] Proxy server running on http://localhost:${PORT}`);

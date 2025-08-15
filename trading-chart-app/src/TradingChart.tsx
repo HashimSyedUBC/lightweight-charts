@@ -119,6 +119,8 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
   const wsRef = useRef<WebSocket | null>(null);
   const firstDataArrivedRef = useRef(false);
   const lastBarTimeSecRef = useRef<number | null>(null);
+  const backfillCompleteRef = useRef(false);
+  const lastBackfillTimestampRef = useRef<number>(0);
 
 
 
@@ -322,9 +324,104 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       notifyDataRangeChangeCallback();
     });
 
+    // Helper: fetch backfill (prefer 1-second, fallback to minute)
+    // Helper: fetch single time range
+    const fetchTimeRange = async (fromSec: number, toSec: number): Promise<CandlestickData[]> => {
+      const base = `/api/aggregates/${encodeURIComponent(symbol)}/${fromSec}/${toSec}`;
+      const urls = [
+        `${base}?timespan=second`, // preferred true 1s backfill
+        `${base}` // fallback to minute
+      ];
+      
+      for (const url of urls) {
+        try {
+          const resp = await fetch(url);
+          if (!resp.ok) continue;
+          const j = await resp.json();
+          const arr = Array.isArray(j?.results) ? j.results : [];
+          if (!arr.length) continue;
+          
+          // Convert to CandlestickData
+          const bars: CandlestickData[] = arr.map((r: any) => ({
+            time: Math.trunc((r.t ?? r.start) / 1000) as Time,
+            open: r.o,
+            high: r.h,
+            low: r.l,
+            close: r.c,
+          }));
+          
+          return bars;
+        } catch (e) {
+          continue;
+        }
+      }
+      return [];
+    };
+
+    // Optimized backfill to get maximum 1300 bars with fewer API calls
+    const loadBackfill = async () => {
+      const nowSec = Math.floor(Date.now() / 1000);
+      const TARGET_BARS = 1300;
+      const CHUNK_HOURS = 6; // Fetch 6-hour chunks to reduce API calls
+      const MAX_CHUNKS = 4; // Max 4 chunks = 24 hours safety limit
+      
+      let allBars: CandlestickData[] = [];
+      let chunksBack = 1;
+      
+      while (allBars.length < TARGET_BARS && chunksBack <= MAX_CHUNKS) {
+        const fromSec = nowSec - (chunksBack * CHUNK_HOURS * 3600);
+        const toSec = nowSec - ((chunksBack - 1) * CHUNK_HOURS * 3600);
+        
+        const newBars = await fetchTimeRange(fromSec, toSec);
+        if (newBars.length > 0) {
+          // Prepend older data (maintain chronological order)
+          allBars = [...newBars, ...allBars];
+          
+          // Stop immediately if we hit our target
+          if (allBars.length >= TARGET_BARS) {
+            allBars = allBars.slice(-TARGET_BARS); // Keep only last 1300 bars
+            break;
+          }
+        }
+        
+        chunksBack++;
+      }
+      
+      if (allBars.length === 0) {
+        backfillCompleteRef.current = true;
+        return;
+      }
+      
+      // Remove duplicates and ensure sorted
+      const uniqueBars = allBars.filter((bar, index, arr) => 
+        index === 0 || (bar.time as number) !== (arr[index - 1].time as number)
+      );
+      uniqueBars.sort((a: any, b: any) => (a.time as number) - (b.time as number));
+      
+      // Set chart data
+      chartDataRef.current = uniqueBars;
+      seriesRef.current?.setData(uniqueBars);
+      
+      // Compute cadence
+      if (chartDataRef.current.length >= 2) {
+        barIntervalSecRef.current = computeCadenceSec(chartDataRef.current, barIntervalSecRef.current);
+      }
+      
+      // Track last backfill timestamp
+      lastBackfillTimestampRef.current = (uniqueBars[uniqueBars.length - 1].time as number) || 0;
+      
+      // Fit chart
+      chart.timeScale().fitContent();
+      
+      firstDataArrivedRef.current = true;
+      backfillCompleteRef.current = true;
+      notifyDataRangeChangeCallback();
+      console.log(`✅ Backfill complete: ${uniqueBars.length} bars loaded`);
+    };
+
     // Use global WebSocket connection manager to prevent duplicates
     const handleWsPayload = (s: string) => {
-      console.log('[CHART] Received data:', s);
+
       let arr: any[] = [];
       try {
         const parsed = JSON.parse(s);
@@ -342,6 +439,9 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
         const ms: number | undefined = (ev?.s ?? ev?.t);
         if (typeof ms !== 'number') continue;
         const tSec = Math.trunc(ms / 1000);
+
+        // Dedup against backfill boundary
+        if (tSec <= lastBackfillTimestampRef.current) continue;
 
         const o = ev?.o, h = ev?.h, l = ev?.l, c = ev?.c;
         if (
@@ -393,73 +493,68 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       }
     };
 
-    // Subscribe to global WebSocket
-    globalWSSubscribers.add(handleWsPayload);
+    // Kick off backfill first, then attach WS and subscribe
 
-    // Create global connection if it doesn't exist
-    if (!globalWS || globalWS.readyState === WebSocket.CLOSED) {
-      console.log('[CHART] Creating global WebSocket connection...');
-      globalWS = new WebSocket('ws://localhost:8090/ws');
+    loadBackfill().finally(() => {
 
-      globalWS.onopen = () => {
-        console.log('[CHART] ✅ Global WebSocket connected!');
-        try {
-          // Check if globalWS still exists (race condition protection)
-          if (globalWS && globalWS.readyState === WebSocket.OPEN) {
-            console.log('[CHART] Sending ticker subscription:', symbol);
-            globalWS.send(JSON.stringify({ ticker: symbol }));
-          } else {
-            console.log('[CHART] WebSocket was closed before onopen completed');
-          }
-        } catch (e) {
-          console.error('[CHART] send error:', e);
-        }
-      };
+      // Subscribe to global WebSocket
+      globalWSSubscribers.add(handleWsPayload);
 
-      globalWS.onmessage = (event) => {
-        const d: any = (event as MessageEvent).data;
-        let dataStr = '';
-        
-        if (typeof d === 'string') {
-          dataStr = d;
-        } else if (d instanceof Blob) {
-          d.text().then((text) => {
-            globalWSSubscribers.forEach(subscriber => subscriber(text));
-          }).catch((e) => console.error('[WS] blob read error:', e));
-          return;
-        } else {
+      // Create global connection if it doesn't exist
+      if (!globalWS || globalWS.readyState === WebSocket.CLOSED) {
+
+        globalWS = new WebSocket('ws://localhost:8090/ws');
+
+        globalWS.onopen = () => {
+          console.log('✅ WebSocket connected');
           try {
-            dataStr = String(d);
+            if (globalWS && globalWS.readyState === WebSocket.OPEN) {
+              globalWS.send(JSON.stringify({ ticker: symbol }));
+            }
           } catch (e) {
-            console.error('[WS] unknown payload type:', e);
-            return;
+            console.error('[CHART] send error:', e);
           }
-        }
+        };
 
-        // Notify all subscribers
-        globalWSSubscribers.forEach(subscriber => subscriber(dataStr));
-      };
+        globalWS.onmessage = (event) => {
+          const d: any = (event as MessageEvent).data;
+          let dataStr = '';
+          if (typeof d === 'string') {
+            dataStr = d;
+          } else if (d instanceof Blob) {
+            d.text().then((text) => {
+              globalWSSubscribers.forEach(subscriber => subscriber(text));
+            }).catch((e) => console.error('[WS] blob read error:', e));
+            return;
+          } else {
+            try {
+              dataStr = String(d);
+            } catch (e) {
+              console.error('[WS] unknown payload type:', e);
+              return;
+            }
+          }
+          globalWSSubscribers.forEach(subscriber => subscriber(dataStr));
+        };
 
-      globalWS.onerror = (e) => {
-        console.error('[CHART] ❌ Global WebSocket error:', e);
-      };
+        globalWS.onerror = (e) => {
+          console.error('[CHART] ❌ Global WebSocket error:', e);
+        };
 
-      globalWS.onclose = (e) => {
-        console.log('[CHART] 🔌 Global WebSocket closed:', e.code, e.reason);
-        globalWS = null;
-      };
-    } else {
-      console.log('[CHART] Using existing global WebSocket connection');
-      // If already connected, send subscription immediately
-      if (globalWS.readyState === WebSocket.OPEN) {
-        try {
-          console.log('[CHART] Sending ticker subscription to existing connection:', symbol);
-          globalWS.send(JSON.stringify({ ticker: symbol }));
-        } catch (e) {
-          console.error('[CHART] send error:', e);
+        globalWS.onclose = (e) => {
+
+          globalWS = null;
+        };
+      } else {
+        if (globalWS.readyState === WebSocket.OPEN) {
+          try {
+            globalWS.send(JSON.stringify({ ticker: symbol }));
+          } catch (e) {
+            console.error('[CHART] send error:', e);
+          }
         }
       }
-    }
+    });
 
     // Cleanup
     return () => {
@@ -467,19 +562,19 @@ export const TradingChart = forwardRef<TradingChartRef, TradingChartProps>(
       
       // Unsubscribe from global WebSocket
       globalWSSubscribers.delete(handleWsPayload);
-      console.log('[CHART] Unsubscribed from global WebSocket, remaining subscribers:', globalWSSubscribers.size);
+
       
       // Close global connection if no more subscribers (with delay for React StrictMode)
       if (globalWSSubscribers.size === 0 && globalWS) {
-        console.log('[CHART] No more subscribers, scheduling WebSocket close...');
+
         // Small delay to handle React StrictMode double-mounting
         setTimeout(() => {
           if (globalWSSubscribers.size === 0 && globalWS) {
-            console.log('[CHART] Closing global WebSocket after delay');
+
             globalWS.close();
             globalWS = null;
           } else {
-            console.log('[CHART] WebSocket close cancelled - new subscribers found');
+
           }
         }, 100);
       }
