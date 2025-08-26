@@ -1,0 +1,670 @@
+{
+  "testStart": "2025-08-22T20:36:32.870Z",
+  "testDuration": 120000,
+  "totalClients": 16,
+  "clients": {
+    "stocks-aapl-sec": {
+      "config": {
+        "id": "stocks-aapl-sec",
+        "market": "stocks",
+        "ticker": "AAPL",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 15,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:38.051Z",
+          "data": {
+            "ev": "A",
+            "sym": "AAPL",
+            "v": 200,
+            "av": 42216196,
+            "op": 226.17,
+            "vw": 227.9742,
+            "o": 227.9683,
+            "c": 227.98,
+            "h": 227.98,
+            "l": 227.9683,
+            "a": 227.764,
+            "z": 100,
+            "s": 1755894095000,
+            "e": 1755894096000
+          }
+        }
+      ],
+      "messageCount": 1,
+      "errors": [],
+      "status": "closed"
+    },
+    "stocks-spy-sec": {
+      "config": {
+        "id": "stocks-spy-sec",
+        "market": "stocks",
+        "ticker": "SPY",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:34.057Z",
+          "data": {
+            "ev": "A",
+            "sym": "SPY",
+            "v": 201,
+            "av": 83594573,
+            "op": 637.76,
+            "vw": 645.4101,
+            "o": 645.41,
+            "c": 645.41,
+            "h": 645.41,
+            "l": 645.41,
+            "a": 644.0702,
+            "z": 33,
+            "s": 1755894091000,
+            "e": 1755894092000
+          }
+        }
+      ],
+      "messageCount": 1,
+      "errors": [],
+      "status": "closed"
+    },
+    "stocks-aapl-min": {
+      "config": {
+        "id": "stocks-aapl-min",
+        "market": "stocks",
+        "ticker": "AAPL",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 9,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "stocks-spy-min": {
+      "config": {
+        "id": "stocks-spy-min",
+        "market": "stocks",
+        "ticker": "SPY",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "indices-spx-sec": {
+      "config": {
+        "id": "indices-spx-sec",
+        "market": "indices",
+        "ticker": "SPX",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "indices-ndx-sec": {
+      "config": {
+        "id": "indices-ndx-sec",
+        "market": "indices",
+        "ticker": "NDX",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:34.056Z",
+          "data": {
+            "ev": "A",
+            "sym": "I:NDX",
+            "o": 23498.11513899334,
+            "c": 23498.11513899334,
+            "h": 23498.11513899334,
+            "l": 23498.11513899334,
+            "s": 1755894991000,
+            "e": 1755894992000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:35.024Z",
+          "data": {
+            "ev": "A",
+            "sym": "I:NDX",
+            "o": 23498.11513899334,
+            "c": 23498.11513899334,
+            "h": 23498.11513899334,
+            "l": 23498.11513899334,
+            "s": 1755894992000,
+            "e": 1755894993000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:36.002Z",
+          "data": {
+            "ev": "A",
+            "sym": "I:NDX",
+            "o": 23498.11513899334,
+            "c": 23498.11513899334,
+            "h": 23498.11513899334,
+            "l": 23498.11513899334,
+            "s": 1755894993000,
+            "e": 1755894994000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:37.025Z",
+          "data": {
+            "ev": "A",
+            "sym": "I:NDX",
+            "o": 23498.11513899334,
+            "c": 23498.11513899334,
+            "h": 23498.11513899334,
+            "l": 23498.11513899334,
+            "s": 1755894994000,
+            "e": 1755894995000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:38.050Z",
+          "data": {
+            "ev": "A",
+            "sym": "I:NDX",
+            "o": 23498.11513899334,
+            "c": 23498.11513899334,
+            "h": 23498.11513899334,
+            "l": 23498.11513899334,
+            "s": 1755894995000,
+            "e": 1755894996000
+          }
+        }
+      ],
+      "messageCount": 16,
+      "errors": [],
+      "status": "closed"
+    },
+    "indices-spx-min": {
+      "config": {
+        "id": "indices-spx-min",
+        "market": "indices",
+        "ticker": "SPX",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "indices-ndx-min": {
+      "config": {
+        "id": "indices-ndx-min",
+        "market": "indices",
+        "ticker": "NDX",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 9,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "crypto-btc-sec": {
+      "config": {
+        "id": "crypto-btc-sec",
+        "market": "crypto",
+        "ticker": "BTC-USD",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 9,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:35.023Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "BTC-USD",
+            "v": 0.00041982,
+            "vw": 116890.78,
+            "z": 0,
+            "o": 116890.78,
+            "c": 116890.78,
+            "h": 116890.78,
+            "l": 116890.78,
+            "s": 1755894992000,
+            "e": 1755894993000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:35.998Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "BTC-USD",
+            "v": 0.00251323,
+            "vw": 116897.3045,
+            "z": 0,
+            "o": 116890.79,
+            "c": 116884.6,
+            "h": 116897.99,
+            "l": 116884.6,
+            "s": 1755894993000,
+            "e": 1755894994000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:37.022Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "BTC-USD",
+            "v": 0.08750222,
+            "vw": 116901.0722,
+            "z": 0,
+            "o": 116886,
+            "c": 116901.93,
+            "h": 116903.32,
+            "l": 116886,
+            "s": 1755894994000,
+            "e": 1755894995000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:38.050Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "BTC-USD",
+            "v": 0.00648199,
+            "vw": 116894.5713,
+            "z": 0,
+            "o": 116886,
+            "c": 116887,
+            "h": 116897.09,
+            "l": 116886,
+            "s": 1755894995000,
+            "e": 1755894996000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:39.074Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "BTC-USD",
+            "v": 0.00393519,
+            "vw": 116895.7074,
+            "z": 0,
+            "o": 116887,
+            "c": 116897.09,
+            "h": 116897.09,
+            "l": 116887,
+            "s": 1755894996000,
+            "e": 1755894997000
+          }
+        }
+      ],
+      "messageCount": 13,
+      "errors": [],
+      "status": "closed"
+    },
+    "crypto-eth-sec": {
+      "config": {
+        "id": "crypto-eth-sec",
+        "market": "crypto",
+        "ticker": "ETH-USD",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:34.057Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "ETH-USD",
+            "v": 1.74137774,
+            "vw": 4823.8368,
+            "z": 0,
+            "o": 4823.67,
+            "c": 4824.31,
+            "h": 4824.31,
+            "l": 4823.67,
+            "s": 1755894991000,
+            "e": 1755894992000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:35.010Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "ETH-USD",
+            "v": 0.63808809,
+            "vw": 4824.172,
+            "z": 0,
+            "o": 4824.31,
+            "c": 4824.17,
+            "h": 4824.31,
+            "l": 4824.17,
+            "s": 1755894992000,
+            "e": 1755894993000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:36.007Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "ETH-USD",
+            "v": 4.8126166,
+            "vw": 4824.7507,
+            "z": 0,
+            "o": 4824.31,
+            "c": 4824.92,
+            "h": 4829.8,
+            "l": 4823.5,
+            "s": 1755894993000,
+            "e": 1755894994000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:37.053Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "ETH-USD",
+            "v": 0.14329737,
+            "vw": 4824.544,
+            "z": 0,
+            "o": 4824.9,
+            "c": 4824.69,
+            "h": 4824.9,
+            "l": 4823.2,
+            "s": 1755894994000,
+            "e": 1755894995000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:38.049Z",
+          "data": {
+            "ev": "XAS",
+            "pair": "ETH-USD",
+            "v": 0.12419613,
+            "vw": 4824.86,
+            "z": 0,
+            "o": 4824.86,
+            "c": 4824.86,
+            "h": 4824.86,
+            "l": 4824.86,
+            "s": 1755894995000,
+            "e": 1755894996000
+          }
+        }
+      ],
+      "messageCount": 16,
+      "errors": [],
+      "status": "closed"
+    },
+    "crypto-btc-min": {
+      "config": {
+        "id": "crypto-btc-min",
+        "market": "crypto",
+        "ticker": "BTC-USD",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 10,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "crypto-eth-min": {
+      "config": {
+        "id": "crypto-eth-min",
+        "market": "crypto",
+        "ticker": "ETH-USD",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 15,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "forex-eur-sec": {
+      "config": {
+        "id": "forex-eur-sec",
+        "market": "forex",
+        "ticker": "EUR-USD",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 14,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:36.026Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "EUR/USD",
+            "v": 3,
+            "o": 1.17223,
+            "c": 1.1721,
+            "h": 1.17223,
+            "l": 1.1721,
+            "s": 1755894993000,
+            "e": 1755894994000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:37.007Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "EUR/USD",
+            "v": 3,
+            "o": 1.17223,
+            "c": 1.17223,
+            "h": 1.17223,
+            "l": 1.17218,
+            "s": 1755894994000,
+            "e": 1755894995000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:38.051Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "EUR/USD",
+            "v": 1,
+            "o": 1.17221,
+            "c": 1.17221,
+            "h": 1.17221,
+            "l": 1.17221,
+            "s": 1755894995000,
+            "e": 1755894996000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:41.021Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "EUR/USD",
+            "v": 1,
+            "o": 1.17215,
+            "c": 1.17215,
+            "h": 1.17215,
+            "l": 1.17215,
+            "s": 1755894998000,
+            "e": 1755894999000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:42.045Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "EUR/USD",
+            "v": 1,
+            "o": 1.17223,
+            "c": 1.17223,
+            "h": 1.17223,
+            "l": 1.17223,
+            "s": 1755894999000,
+            "e": 1755895000000
+          }
+        }
+      ],
+      "messageCount": 8,
+      "errors": [],
+      "status": "closed"
+    },
+    "forex-gbp-sec": {
+      "config": {
+        "id": "forex-gbp-sec",
+        "market": "forex",
+        "ticker": "GBP-USD",
+        "interval": "second"
+      },
+      "connected": true,
+      "connectionTime": 14,
+      "messages": [
+        {
+          "timestamp": "2025-08-22T20:36:35.043Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "GBP/USD",
+            "v": 1,
+            "o": 1.35214,
+            "c": 1.35214,
+            "h": 1.35214,
+            "l": 1.35214,
+            "s": 1755894992000,
+            "e": 1755894993000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:36.000Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "GBP/USD",
+            "v": 5,
+            "o": 1.35218,
+            "c": 1.35219,
+            "h": 1.35221,
+            "l": 1.35218,
+            "s": 1755894993000,
+            "e": 1755894994000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:37.043Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "GBP/USD",
+            "v": 1,
+            "o": 1.3522,
+            "c": 1.3522,
+            "h": 1.3522,
+            "l": 1.3522,
+            "s": 1755894994000,
+            "e": 1755894995000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:40.100Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "GBP/USD",
+            "v": 1,
+            "o": 1.35219,
+            "c": 1.35219,
+            "h": 1.35219,
+            "l": 1.35219,
+            "s": 1755894997000,
+            "e": 1755894998000
+          }
+        },
+        {
+          "timestamp": "2025-08-22T20:36:41.022Z",
+          "data": {
+            "ev": "CAS",
+            "pair": "GBP/USD",
+            "v": 3,
+            "o": 1.35219,
+            "c": 1.352,
+            "h": 1.3522,
+            "l": 1.352,
+            "s": 1755894998000,
+            "e": 1755894999000
+          }
+        }
+      ],
+      "messageCount": 13,
+      "errors": [],
+      "status": "closed"
+    },
+    "forex-eur-min": {
+      "config": {
+        "id": "forex-eur-min",
+        "market": "forex",
+        "ticker": "EUR-USD",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 14,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    },
+    "forex-gbp-min": {
+      "config": {
+        "id": "forex-gbp-min",
+        "market": "forex",
+        "ticker": "GBP-USD",
+        "interval": "minute"
+      },
+      "connected": true,
+      "connectionTime": 15,
+      "messages": [],
+      "messageCount": 0,
+      "errors": [],
+      "status": "closed"
+    }
+  },
+  "summary": {
+    "connected": 16,
+    "failed": 0,
+    "totalMessages": 68,
+    "marketBreakdown": {
+      "stocks": {
+        "total": 4,
+        "connected": 4,
+        "messages": 2
+      },
+      "indices": {
+        "total": 4,
+        "connected": 4,
+        "messages": 16
+      },
+      "crypto": {
+        "total": 4,
+        "connected": 4,
+        "messages": 29
+      },
+      "forex": {
+        "total": 4,
+        "connected": 4,
+        "messages": 21
+      }
+    }
+  },
+  "testEnd": "2025-08-22T20:36:49.915Z",
+  "testDurationActual": 17045
+}
